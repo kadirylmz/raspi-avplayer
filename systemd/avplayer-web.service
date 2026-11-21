@@ -7,6 +7,7 @@ Wants=network.target
 Type=simple
 EnvironmentFile=/etc/avplayer.env
 WorkingDirectory=/opt/avplayer
+ExecStartPre=-/usr/sbin/iw dev wlan0 set power_save off
 ExecStart=/opt/avplayer/venv/bin/uvicorn app.main:app --host 0.0.0.0 --port ${AVP_PORT} --workers 1 --no-access-log
 Restart=always
 RestartSec=2

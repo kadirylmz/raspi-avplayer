@@ -1,5 +1,6 @@
 """SQLite storage: settings, videos, jobs, devices, command queue, logs."""
 import json
+import os
 import secrets
 import sqlite3
 import time
@@ -84,7 +85,7 @@ def connect() -> sqlite3.Connection:
     c = sqlite3.connect(str(config.DB_PATH), timeout=15, isolation_level=None)
     c.row_factory = sqlite3.Row
     c.execute("PRAGMA journal_mode=WAL")
-    c.execute("PRAGMA synchronous=NORMAL")
+    c.execute("PRAGMA synchronous=FULL")
     return c
 
 
@@ -129,8 +130,17 @@ def get(key: str, default: Any = None) -> Any:
 
 
 def put(key: str, value: Any) -> None:
-    x("INSERT INTO settings(k,v) VALUES(?,?) ON CONFLICT(k) DO UPDATE SET v=excluded.v",
-      (key, json.dumps(value)))
+    c = connect()
+    try:
+        c.execute("INSERT INTO settings(k,v) VALUES(?,?) ON CONFLICT(k) DO UPDATE SET v=excluded.v",
+                  (key, json.dumps(value)))
+        c.execute("PRAGMA wal_checkpoint(TRUNCATE)")
+    finally:
+        c.close()
+    try:
+        os.sync()
+    except AttributeError:
+        pass
 
 
 def all_settings() -> dict:

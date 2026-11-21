@@ -128,12 +128,13 @@ class Daemon:
         s = db.all_settings()
         self.want_play = bool(s["boot_autoplay"])
         log.info("Player servisi başladı (model=%s, boot_autoplay=%s)", hardware.model(), self.want_play)
-        self._wait_network()
+        notify("READY=1")
+        self._wait_drm()
+        self._wait_network(5)
         try:
             self.hw_help = subprocess.run(["mpv", "--hwdec=help"], capture_output=True, text=True, timeout=10).stdout
         except Exception as e:
             log.error("mpv bulunamadı/çalışmıyor: %s", e)
-        notify("READY=1")
         while not self.stop_flag:
             try:
                 self.tick()
@@ -144,9 +145,23 @@ class Daemon:
         self._stop_mpv()
         log.info("Player servisi durduruldu")
 
-    def _wait_network(self, timeout: int = 15) -> None:
+    def _wait_drm(self, timeout: int = 20) -> None:
+        """Wait until DRM/KMS card (/dev/dri/card*) and at least one HDMI connector exist after cold boot."""
+        end = time.time() + timeout
+        while time.time() < end:
+            notify("WATCHDOG=1")
+            cards = list(Path("/dev/dri").glob("card*"))
+            if cards:
+                disp = hardware.display_info()
+                if disp.get("connected") or time.time() + 5 >= end:
+                    log.info("DRM ekran hazır: %s (bağlı=%s)", [c.name for c in cards], disp.get("connected"))
+                    return
+            time.sleep(1)
+
+    def _wait_network(self, timeout: int = 5) -> None:
         end = time.time() + timeout
         while time.time() < end and not system.network_ok():
+            notify("WATCHDOG=1")
             time.sleep(1)
         if system.network_ok():
             log.info("Ağ hazır: %s", ", ".join(system.ips()))

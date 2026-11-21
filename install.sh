@@ -59,11 +59,15 @@ EOF
 # ---------------------------------------------------------------- sistem ayarları
 BOOT=/boot/firmware; [[ -d $BOOT ]] || BOOT=/boot
 if [[ -f $BOOT/cmdline.txt ]]; then
-  log "Konsol ayarları (ekran kararmasın, imleç/logo gizli)"
+  log "Konsol ayarları (ekran kararmasın, imleç/logo gizli, ani elektrik kesintisinde fsck takılmasın)"
   cp -n "$BOOT/cmdline.txt" "$BOOT/cmdline.txt.avplayer.bak"
-  for opt in consoleblank=0 logo.nologo vt.global_cursor_default=0; do
+  for opt in consoleblank=0 logo.nologo vt.global_cursor_default=0 fsck.mode=auto fsck.repair=yes rootwait; do
     grep -q "$opt" "$BOOT/cmdline.txt" || sed -i "1 s/\$/ $opt/" "$BOOT/cmdline.txt"
   done
+fi
+if [[ -f $BOOT/config.txt ]]; then
+  log "HDMI hotplug zorlanıyor (TV/projeksiyon geç açılsa bile HDMI çıkışı aktif başlar)"
+  grep -q '^hdmi_force_hotplug=1' "$BOOT/config.txt" || printf '\nhdmi_force_hotplug=1\n' >>"$BOOT/config.txt"
 fi
 if [[ $ENABLE_4KP60 -eq 1 && $PI == pi4 && -f $BOOT/config.txt ]]; then
   log "Pi 4: 4Kp60 HDMI etkinleştiriliyor (daha fazla ısınır, iyi soğutma gerekir)"
