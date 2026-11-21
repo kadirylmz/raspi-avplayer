@@ -76,7 +76,7 @@ def build_standby_args(bg_path: str, sock: str, vo_args: Optional[list[str]] = N
         "--image-display-duration=1", "--loop-file=inf",
         "--osd-level=1", "--no-osc", "--no-input-default-bindings", "--input-vo-keyboard=no",
         "--osd-font-size=78", "--osd-bold=yes",
-        "--osd-align-x=center", "--osd-align-y=center",
+        "--osd-align-x=center", "--osd-align-y=bottom", "--osd-margin-y=335",
         "--osd-color=#FFFFFFFF", "--osd-back-color=#00000000",
         "--osd-border-size=2", "--osd-border-color=#663B9EFF", "--osd-shadow-offset=3", "--osd-shadow-color=#99000000",
         "--cursor-autohide=always", "--no-border", "--msg-level=all=warn",
@@ -471,15 +471,12 @@ class Daemon:
         if not self.ipc.sock:
             return
         # Company name, subtitle and date are baked into the rounded glass card by Pillow (_ensure_standby_bg).
-        # Calling show-text (in addition to osd-msg1) forces mpv's VO to immediately redraw the frame every second!
-        txt = ("\n\n\n" + time.strftime("%H:%M:%S")) if s.get("welcome_show_clock", True) else ""
+        # --image-display-duration=1 already redraws every second, so we ONLY set osd-msg1 (no show-text duplicate!)
+        # and --osd-align-y=bottom --osd-margin-y=335 places the single clock cleanly in the open slot above the date.
+        txt = time.strftime("%H:%M:%S") if s.get("welcome_show_clock", True) else ""
         if txt != self.last_clock_str:
             self.last_clock_str = txt
             self.ipc.set("osd-msg1", txt)
-            try:
-                self.ipc.command("show-text", txt, 1500, 1)
-            except MpvError:
-                pass
 
     def _failure(self, msg: str) -> None:
         self.fails += 1
