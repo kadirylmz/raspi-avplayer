@@ -183,3 +183,6 @@ def test_auth(client):
 def test_static_ui(client):
     assert "AV Player" in client.get("/").text
     assert client.get("/static/app.js").status_code == 200
+    assert client.delete("/api/logs").status_code == 200
+    assert client.get("/api/logs").json() == []
+    assert client.delete("/api/jobs").status_code == 200

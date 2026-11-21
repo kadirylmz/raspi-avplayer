@@ -173,6 +173,17 @@ def logs(level: str = "", source: str = "", limit: int = 300):
     return db.get_logs(level, source, limit)
 
 
+@router.delete("/logs")
+def clear_logs():
+    db.x("DELETE FROM logs")
+    for f in config.LOG_DIR.glob("*.log*"):
+        try:
+            f.write_text("") if f.suffix == ".log" else f.unlink(missing_ok=True)
+        except OSError:
+            pass
+    return {"ok": True}
+
+
 @router.get("/logs/download", response_class=PlainTextResponse)
 def logs_download():
     rows = reversed(db.get_logs(limit=2000))

@@ -154,6 +154,13 @@ def cancel(jid: int):
     return {"ok": True}
 
 
+@router.delete("/api/jobs")
+def clear_jobs():
+    db.x("DELETE FROM jobs WHERE state NOT IN ('queued','running')")
+    log.info("Dönüştürme geçmişi temizlendi")
+    return {"ok": True}
+
+
 class ActivateIn(BaseModel):
     force: bool = False
 

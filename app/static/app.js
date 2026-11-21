@@ -169,9 +169,10 @@ function renderVideos(vs) {
   }).join("")}</div>` : `<div class="card mut">Henüz video yok.</div>`;
 }
 function renderJobs(js) {
-  $("#jobs").innerHTML = js.length ? `<h3 style="margin-top:20px">Dönüştürme geçmişi</h3><div class="card"><table><tr><th>#</th><th>Video</th><th>Profil</th><th>Durum</th><th>Mesaj</th></tr>
-  ${js.slice(0, 8).map(j => `<tr><td>${j.id}</td><td>${esc(j.name || "-")}</td><td>${esc(j.profile)}</td><td>${j.state}${j.state === "running" ? " %" + j.progress : ""}${["queued", "running"].includes(j.state) ? ` <button onclick="cancelJob(${j.id})">İptal</button>` : ""}</td><td class="sm">${esc(j.message || "")}</td></tr>`).join("")}</table></div>` : "";
+  $("#jobs").innerHTML = js.length ? `<div class="row sp" style="margin-top:20px"><h3 style="margin:0">Dönüştürme geçmişi</h3><button class="dng" onclick="clearJobs()">Geçmişi Temizle</button></div><div class="card" style="margin-top:8px"><table><tr><th>#</th><th>Video</th><th>Profil</th><th>Durum</th><th>Mesaj</th></tr>
+  ${js.slice(0, 12).map(j => `<tr><td>${j.id}</td><td>${esc(j.name || "-")}</td><td>${esc(j.profile)}</td><td>${j.state}${j.state === "running" ? " %" + j.progress : ""}${["queued", "running"].includes(j.state) ? ` <button onclick="cancelJob(${j.id})">İptal</button>` : ""}</td><td class="sm">${esc(j.message || "")}</td></tr>`).join("")}</table></div>` : "";
 }
+const clearJobs = () => confirm("Tamamlanmış/iptal edilmiş tüm dönüştürme geçmişi silinsin mi?") && act(() => api("/api/jobs", { method: "DELETE" }), "Dönüştürme geçmişi temizlendi");
 const activate = (id, force) => act(async () => {
   try { await api(`/api/videos/${id}/activate`, { method: "POST", json: { force: !!force } }); toast("Aktif video ayarlandı", "ok"); }
   catch (e) { if (/dönüştürül/.test(e.message) && confirm(e.message + "\n\nYine de dönüştürmeden oynatılsın mı? (akıcılık garanti değil)")) return activate(id, true); throw e; }
@@ -373,13 +374,15 @@ function logs() {
   $("#view").innerHTML = `<h2>Log ve Hata Kayıtları</h2><div class="card"><div class="row" style="margin-bottom:10px">
     <select id="lv"><option value="">Tüm seviyeler</option><option>WARNING</option><option>ERROR</option></select>
     <select id="ls"><option value="">Tüm kaynaklar</option><option>player</option><option>video</option><option>convert</option><option>web</option><option>api</option><option>devices</option><option>hardware</option></select>
-    <a class="btn" href="${base}/api/logs/download" target="_blank">İndir</a></div><div id="ll"></div></div>`;
+    <a class="btn" href="${base}/api/logs/download" target="_blank">İndir</a>
+    <button class="dng" id="clrlogs">Tüm Logları Temizle</button></div><div id="ll"></div></div>`;
   const load = async () => {
     try {
       const r = await api(`/api/logs?level=${$("#lv").value}&source=${$("#ls").value}&limit=400`);
       $("#ll").innerHTML = r.map(l => `<div class="logline lv-${l.level}">${new Date(l.ts * 1000).toLocaleString("tr-TR")} <b>${l.level}</b> [${esc(l.source)}] ${esc(l.msg)}</div>`).join("") || "<span class='mut'>Kayıt yok</span>";
     } catch (e) { $("#ll").textContent = e.message; }
   };
+  $("#clrlogs").onclick = () => confirm("Tüm sistem logları ve hata kayıtları silinsin mi?") && act(() => api("/api/logs", { method: "DELETE" }), "Tüm loglar temizlendi").then(load);
   $("#lv").onchange = $("#ls").onchange = load; poll(load, 4000);
 }
 
