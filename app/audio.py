@@ -4,7 +4,7 @@ import re
 import subprocess
 from pathlib import Path
 
-from . import hardware
+from . import config, hardware
 
 KIND_LABEL = {"hdmi": "HDMI AUDIO", "analog": "ANALOG AUDIO (3.5 MM JACK)", "usb": "USB AUDIO"}
 CARD_RE = re.compile(r"^card (\d+): (\S+) \[(.*?)\], device (\d+): (.*?) \[(.*?)\]")
@@ -66,7 +66,7 @@ def list_outputs(model: str | None = None) -> list[dict]:
     model = model or hardware.model()
     if os.name == "nt":
         try:
-            text = subprocess.run(["mpv", "--audio-device=help"], capture_output=True, text=True, timeout=10).stdout
+            text = subprocess.run([config.MPV_BIN, "--audio-device=help"], capture_output=True, text=True, timeout=10).stdout
             outs = parse_wasapi(text)
             if outs:
                 return outs

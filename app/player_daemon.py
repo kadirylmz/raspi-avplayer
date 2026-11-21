@@ -54,7 +54,7 @@ def _default_vo_args() -> list[str]:
 def build_mpv_args(video: str, s: dict, audio_dev: Optional[str], hwdec: str,
                    sock: str, vo_args: Optional[list[str]] = None) -> list[str]:
     args = [
-        "mpv", "--no-config", video,
+        config.MPV_BIN, "--no-config", video,
         "--fs", "--no-input-terminal", "--idle=no", "--force-window=yes",
         "--osd-level=1", "--no-osc", "--no-input-default-bindings", "--input-vo-keyboard=no",
         "--osd-font-size=38", "--osd-align-x=center", "--osd-align-y=top", "--osd-margin-y=36",
@@ -81,7 +81,7 @@ def build_mpv_args(video: str, s: dict, audio_dev: Optional[str], hwdec: str,
 
 def build_standby_args(bg_path: str, sock: str, vo_args: Optional[list[str]] = None) -> list[str]:
     args = [
-        "mpv", "--no-config", bg_path,
+        config.MPV_BIN, "--no-config", bg_path,
         "--fs", "--no-input-terminal", "--idle=yes", "--force-window=yes",
         "--image-display-duration=1", "--loop-file=inf",
         "--osd-level=1", "--no-osc", "--no-input-default-bindings", "--input-vo-keyboard=no",
@@ -303,7 +303,7 @@ class Daemon:
         self._wait_drm()
         self._wait_network(5)
         try:
-            self.hw_help = subprocess.run(["mpv", "--hwdec=help"], capture_output=True, text=True, timeout=10).stdout
+            self.hw_help = subprocess.run([config.MPV_BIN, "--hwdec=help"], capture_output=True, text=True, timeout=10).stdout
         except Exception as e:
             log.error("mpv bulunamadı/çalışmıyor: %s", e)
         # Check and consume warm_reboot_flag right at startup (so we don't even wait for video to start to clear it!)

@@ -112,7 +112,7 @@ def display_info() -> dict:
 
 def _ffmpeg_ok(args: list[str], timeout: int = 40) -> tuple[bool, str]:
     try:
-        p = subprocess.run(["ffmpeg", "-hide_banner", "-v", "error", "-y", *args],
+        p = subprocess.run([config.FFMPEG_BIN, "-hide_banner", "-v", "error", "-y", *args],
                            capture_output=True, text=True, timeout=timeout)
         return p.returncode == 0, p.stderr.strip()[-200:]
     except FileNotFoundError:
@@ -122,7 +122,7 @@ def _ffmpeg_ok(args: list[str], timeout: int = 40) -> tuple[bool, str]:
 
 
 def test_encoder(name: str) -> dict:
-    listed = name in _out(["ffmpeg", "-hide_banner", "-encoders"])
+    listed = name in _out([config.FFMPEG_BIN, "-hide_banner", "-encoders"])
     if not listed:
         return {"listed": False, "works": False, "note": "ffmpeg derlemesinde yok"}
     ok, err = _ffmpeg_ok(["-f", "lavfi", "-i", "testsrc2=size=1280x720:rate=30", "-frames:v", "15",

@@ -17,7 +17,7 @@ log = logging.getLogger("avp.convert")
 
 def build_cmd(src: str, dst: str, plan: dict, encoder: str) -> list[str]:
     """encoder: libx264 | libx265 | h264_v4l2m2m (ignored for copy/remux)."""
-    cmd = ["ffmpeg", "-hide_banner", "-y", "-nostdin", "-v", "error", "-i", src,
+    cmd = [config.FFMPEG_BIN, "-hide_banner", "-y", "-nostdin", "-v", "error", "-i", src,
            "-map", "0:v:0", "-map", "0:a:0?", "-sn", "-dn", "-map_metadata", "-1"]
     if plan["action"] in ("copy", "remux"):
         cmd += ["-c:v", "copy"]

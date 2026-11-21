@@ -63,7 +63,15 @@ foreach ($tool in @(
   }
 }
 
-# Kurulum sonrası PATH'i tekrar tazele
+# MPV ve Winget Links klasörlerini PATH'e ekle
+$extraPaths = @("C:\Program Files\MPV Player", "C:\Program Files\mpv", "$env:LOCALAPPDATA\Microsoft\WinGet\Links")
+$curUserPath = [System.Environment]::GetEnvironmentVariable("Path", "User")
+foreach ($ep in $extraPaths) {
+  if ((Test-Path $ep) -and ($curUserPath -notlike "*$ep*")) {
+    $curUserPath = "$ep;$curUserPath"
+  }
+}
+[System.Environment]::SetEnvironmentVariable("Path", $curUserPath, "User")
 $env:Path = [System.Environment]::GetEnvironmentVariable("Path","Machine") + ";" + [System.Environment]::GetEnvironmentVariable("Path","User")
 
 Write-Host "`n==> [2/5] Python paketleri yükleniyor (FastAPI, Uvicorn, Pillow, psutil, httpx)..." -ForegroundColor Cyan
@@ -93,6 +101,7 @@ if ((Test-Path $bgCand) -and (-not (Test-Path "$brandingDir\bg.jpg"))) {
 
 $webRunner = "$DataDir\run-web.ps1"
 @"
+`$env:Path = "C:\Program Files\MPV Player;C:\Program Files\mpv;`$env:LOCALAPPDATA\Microsoft\WinGet\Links;" + `$env:Path
 `$env:AVP_DATA = "$DataDir"
 `$env:AVP_RUN  = "$DataDir\run"
 `$env:AVP_PORT = "$Port"
@@ -105,6 +114,7 @@ while (`$true) {
 
 $playerRunner = "$DataDir\run-player.ps1"
 @"
+`$env:Path = "C:\Program Files\MPV Player;C:\Program Files\mpv;`$env:LOCALAPPDATA\Microsoft\WinGet\Links;" + `$env:Path
 `$env:AVP_DATA = "$DataDir"
 `$env:AVP_RUN  = "$DataDir\run"
 Set-Location "$here"

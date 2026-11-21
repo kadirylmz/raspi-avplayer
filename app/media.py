@@ -5,6 +5,8 @@ import subprocess
 from pathlib import Path
 from typing import Optional
 
+from . import config
+
 log = logging.getLogger("avp.media")
 
 
@@ -25,7 +27,7 @@ def frac(s) -> float:
 
 
 def ffprobe(path: str | Path) -> dict:
-    p = _run(["ffprobe", "-v", "error", "-print_format", "json", "-show_format", "-show_streams", str(path)])
+    p = _run([config.FFPROBE_BIN, "-v", "error", "-print_format", "json", "-show_format", "-show_streams", str(path)])
     if p.returncode != 0:
         raise ValueError((p.stderr or "ffprobe başarısız").strip()[:300])
     return json.loads(p.stdout)
