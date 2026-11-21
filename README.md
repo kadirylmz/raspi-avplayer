@@ -96,7 +96,17 @@ powershell -ExecutionPolicy Bypass -File .\install-windows.ps1
 > 4. Windows WASAPI ses çıkışlarını (HDMI, Hoparlör/3.5mm, USB DAC) otomatik algılar.
 > 5. 60 saniye reset modlarında **Player Restart**, **Service Restart** ve **Device Reboot (`shutdown /r /t 0 /f`)** birebir aynı şekilde çalışır.
 > 6. Uyku modunu/ekran kapatmayı devre dışı bırakır, güvenlik duvarı portunu açar ve Windows açılışında (`ONLOGON`) otomatik başlayan `AVPlayer-Web` ve `AVPlayer-Player` görevlerini oluşturur.
-> 7. Kaldırmak için: `powershell -ExecutionPolicy Bypass -File .\install-windows.ps1 -Uninstall`
+> 7. **Durdurmak / Kapatmak için:**
+>    ```powershell
+>    powershell -ExecutionPolicy Bypass -File .\stop-windows.ps1          # Oynatıcıyı ve arka planı durdurur
+>    powershell -ExecutionPolicy Bypass -File .\stop-windows.ps1 -Disable # Otomatik açılmayı geçici olarak kapatır
+>    powershell -ExecutionPolicy Bypass -File .\stop-windows.ps1 -Enable  # Otomatik açılmayı tekrar aktif eder
+>    powershell -ExecutionPolicy Bypass -File .\stop-windows.ps1 -Start   # Servisleri tekrar başlatır
+>    ```
+> 8. **Tamamen Kaldırmak için:**
+>    ```powershell
+>    powershell -ExecutionPolicy Bypass -File .\install-windows.ps1 -Uninstall
+>    ```
 
 ---
 
