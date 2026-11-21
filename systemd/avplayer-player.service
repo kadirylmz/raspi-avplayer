@@ -1,0 +1,27 @@
+[Unit]
+Description=AV Player - Video oynatma motoru (mpv gözetmeni)
+# Ağ ZORUNLU DEĞİL: sistem tamamen offline çalışır, daemon ağı en fazla 15 sn bekler.
+After=local-fs.target sound.target systemd-udev-settle.service
+Wants=sound.target
+
+[Service]
+Type=notify
+NotifyAccess=main
+WatchdogSec=30
+EnvironmentFile=/etc/avplayer.env
+WorkingDirectory=/opt/avplayer
+RuntimeDirectory=avplayer
+RuntimeDirectoryPreserve=yes
+ExecStart=/opt/avplayer/venv/bin/python -m app.player_daemon
+Restart=always
+RestartSec=2
+StartLimitIntervalSec=0
+KillMode=control-group
+TimeoutStopSec=10
+# mpv DRM/KMS'e (masaüstü olmadan) doğrudan çizer
+SupplementaryGroups=video audio render input
+StandardInput=null
+Nice=-5
+
+[Install]
+WantedBy=multi-user.target

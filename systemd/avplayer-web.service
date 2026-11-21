@@ -1,0 +1,17 @@
+[Unit]
+Description=AV Player - Web yönetim paneli (FastAPI)
+After=local-fs.target network.target
+Wants=network.target
+
+[Service]
+Type=simple
+EnvironmentFile=/etc/avplayer.env
+WorkingDirectory=/opt/avplayer
+ExecStart=/opt/avplayer/venv/bin/uvicorn app.main:app --host 0.0.0.0 --port ${AVP_PORT} --workers 1 --no-access-log
+Restart=always
+RestartSec=2
+StartLimitIntervalSec=0
+Nice=5
+
+[Install]
+WantedBy=multi-user.target

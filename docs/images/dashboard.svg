@@ -1,0 +1,107 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1100 560" width="1100" height="560" font-family="system-ui, -apple-system, Segoe UI, Roboto, sans-serif">
+  <rect width="1100" height="560" rx="14" fill="#0d1117"/>
+  <!-- Header -->
+  <rect width="1100" height="54" rx="14" fill="#0a0e14"/>
+  <line x1="0" y1="54" x2="1100" y2="54" stroke="#2a3441"/>
+  <circle cx="28" cy="27" r="6" fill="#2ecc71"/>
+  <text x="44" y="33" fill="#e6edf3" font-size="16" font-weight="800" letter-spacing="2">AV PLAYER</text>
+  <rect x="190" y="13" width="70" height="28" rx="7" fill="#1c232d"/>
+  <text x="208" y="32" fill="#e6edf3" font-size="13" font-weight="600">Panel</text>
+  <text x="280" y="32" fill="#8b98a8" font-size="13">Videolar</text>
+  <text x="355" y="32" fill="#8b98a8" font-size="13">Cihazlar</text>
+  <text x="430" y="32" fill="#8b98a8" font-size="13">Ayarlar</text>
+  <text x="500" y="32" fill="#8b98a8" font-size="13">Loglar</text>
+  <text x="850" y="32" fill="#8b98a8" font-size="12">Yönetilen cihaz:</text>
+  <rect x="955" y="13" width="120" height="28" rx="7" fill="#0d1117" stroke="#2a3441"/>
+  <text x="970" y="32" fill="#e6edf3" font-size="12">Salon-1 (Pi 4)</text>
+
+  <!-- Main Active Video Card -->
+  <rect x="24" y="74" width="1052" height="165" rx="12" fill="#161b22" stroke="#2a3441"/>
+  <text x="44" y="102" fill="#8b98a8" font-size="12" font-weight="600" letter-spacing="1">AV-PLAYER · RASPBERRY PI 4 MODEL B REV 1.5</text>
+  <text x="44" y="136" fill="#e6edf3" font-size="26" font-weight="700">Demo.mp4</text>
+  <text x="44" y="158" fill="#8b98a8" font-size="13">1920x1080 · 30 fps (CFR) · H264 · 12.4 Mbps · yuv420p</text>
+
+  <rect x="930" y="90" width="124" height="32" rx="16" fill="#1c232d" stroke="#2ecc71"/>
+  <text x="950" y="111" fill="#2ecc71" font-size="13" font-weight="700">OYNATIYOR</text>
+
+  <!-- Progress Bar -->
+  <rect x="44" y="172" width="1012" height="8" rx="4" fill="#0a0e14"/>
+  <rect x="44" y="172" width="420" height="8" rx="4" fill="#3b9eff"/>
+  <text x="44" y="196" fill="#8b98a8" font-size="11">01:14</text>
+  <text x="1026" y="196" fill="#8b98a8" font-size="11">03:00</text>
+
+  <!-- Controls -->
+  <rect x="44" y="203" width="86" height="28" rx="7" fill="#3b9eff"/>
+  <text x="61" y="221" fill="#04111f" font-size="13" font-weight="700">▶ Oynat</text>
+  <rect x="138" y="203" width="90" height="28" rx="7" fill="#1c232d" stroke="#2a3441"/>
+  <text x="155" y="221" fill="#e6edf3" font-size="13">■ Durdur</text>
+  <rect x="236" y="203" width="215" height="28" rx="7" fill="#1c232d" stroke="#2a3441"/>
+  <text x="252" y="221" fill="#e6edf3" font-size="13">↻ Oynatıcıyı Yeniden Başlat</text>
+  <rect x="460" y="205" width="110" height="24" rx="12" fill="#1c232d" stroke="#2a3441"/>
+  <text x="476" y="221" fill="#e6edf3" font-size="12">🔁 Döngü açık</text>
+
+  <!-- Row 2 Cards -->
+  <!-- Audio Card -->
+  <rect x="24" y="255" width="340" height="140" rx="12" fill="#161b22" stroke="#2a3441"/>
+  <text x="44" y="282" fill="#8b98a8" font-size="12" font-weight="600" letter-spacing="1">SES ÇIKIŞI</text>
+  <text x="44" y="308" fill="#e6edf3" font-size="16" font-weight="700">🔊 100%</text>
+  <rect x="280" y="288" width="64" height="26" rx="6" fill="#1c232d" stroke="#2a3441"/>
+  <text x="293" y="305" fill="#e6edf3" font-size="12">Sustur</text>
+  <rect x="44" y="324" width="300" height="6" rx="3" fill="#0a0e14"/>
+  <rect x="44" y="324" width="230" height="6" rx="3" fill="#3b9eff"/>
+  <rect x="44" y="346" width="300" height="32" rx="7" fill="#0a0e14" stroke="#2a3441"/>
+  <text x="58" y="366" fill="#e6edf3" font-size="12">HDMI AUDIO HDMI 0</text>
+
+  <!-- Device Info Card -->
+  <rect x="380" y="255" width="340" height="140" rx="12" fill="#161b22" stroke="#2a3441"/>
+  <text x="400" y="282" fill="#8b98a8" font-size="12" font-weight="600" letter-spacing="1">CİHAZ DURUMU</text>
+  <text x="400" y="308" fill="#8b98a8" font-size="13">IP Adresi</text>
+  <text x="530" y="308" fill="#e6edf3" font-size="13" font-weight="600">192.168.1.190</text>
+  <text x="400" y="330" fill="#8b98a8" font-size="13">Sıcaklık</text>
+  <text x="530" y="330" fill="#2ecc71" font-size="13" font-weight="600">54.2 °C</text>
+  <text x="400" y="352" fill="#8b98a8" font-size="13">Çalışma Süresi</text>
+  <text x="530" y="352" fill="#e6edf3" font-size="13">3g 14sa 22dk</text>
+  <text x="400" y="374" fill="#8b98a8" font-size="13">İşletim Sistemi</text>
+  <text x="530" y="374" fill="#e6edf3" font-size="13">Debian Bookworm (aarch64)</text>
+
+  <!-- Playback Stats Card -->
+  <rect x="736" y="255" width="340" height="285" rx="12" fill="#161b22" stroke="#2a3441"/>
+  <text x="756" y="282" fill="#8b98a8" font-size="12" font-weight="600" letter-spacing="1">OYNATMA İSTATİSTİKLERİ</text>
+  <text x="756" y="310" fill="#8b98a8" font-size="13">Decoder</text>
+  <text x="930" y="310" fill="#2ecc71" font-size="13" font-weight="600">Donanım: v4l2m2m</text>
+  <text x="756" y="335" fill="#8b98a8" font-size="13">Atlanan kare (VO)</text>
+  <text x="930" y="335" fill="#e6edf3" font-size="13">0</text>
+  <text x="756" y="360" fill="#8b98a8" font-size="13">Atlanan kare (decoder)</text>
+  <text x="930" y="360" fill="#e6edf3" font-size="13">0</text>
+  <text x="756" y="385" fill="#8b98a8" font-size="13">Decoder hataları</text>
+  <text x="930" y="385" fill="#e6edf3" font-size="13">0</text>
+  <text x="756" y="410" fill="#8b98a8" font-size="13">Buffer</text>
+  <text x="930" y="410" fill="#e6edf3" font-size="13">15.0 sn</text>
+  <text x="756" y="435" fill="#8b98a8" font-size="13">A/V Senkron</text>
+  <text x="930" y="435" fill="#e6edf3" font-size="13">0 ms</text>
+  <text x="756" y="460" fill="#8b98a8" font-size="13">Gerçek FPS</text>
+  <text x="930" y="460" fill="#e6edf3" font-size="13">30.0 / 30</text>
+  <text x="756" y="485" fill="#8b98a8" font-size="13">mpv Bellek</text>
+  <text x="930" y="485" fill="#e6edf3" font-size="13">94 MB</text>
+
+  <!-- Row 3 System Resource Cards -->
+  <rect x="24" y="410" width="222" height="130" rx="12" fill="#161b22" stroke="#2a3441"/>
+  <text x="44" y="436" fill="#8b98a8" font-size="12" font-weight="600" letter-spacing="1">CPU KULLANIMI</text>
+  <text x="44" y="476" fill="#e6edf3" font-size="28" font-weight="700">14.2%</text>
+  <rect x="44" y="494" width="182" height="8" rx="4" fill="#0a0e14"/>
+  <rect x="44" y="494" width="28" height="8" rx="4" fill="#3b9eff"/>
+
+  <rect x="258" y="410" width="222" height="130" rx="12" fill="#161b22" stroke="#2a3441"/>
+  <text x="278" y="436" fill="#8b98a8" font-size="12" font-weight="600" letter-spacing="1">RAM KULLANIMI</text>
+  <text x="278" y="476" fill="#e6edf3" font-size="28" font-weight="700">24.3%</text>
+  <rect x="278" y="494" width="182" height="8" rx="4" fill="#0a0e14"/>
+  <rect x="278" y="494" width="45" height="8" rx="4" fill="#3b9eff"/>
+  <text x="278" y="520" fill="#8b98a8" font-size="11">945 MB / 3.8 GB</text>
+
+  <rect x="492" y="410" width="228" height="130" rx="12" fill="#161b22" stroke="#2a3441"/>
+  <text x="512" y="436" fill="#8b98a8" font-size="12" font-weight="600" letter-spacing="1">DİSK DURUMU</text>
+  <text x="512" y="476" fill="#e6edf3" font-size="28" font-weight="700">33.4%</text>
+  <rect x="512" y="494" width="188" height="8" rx="4" fill="#0a0e14"/>
+  <rect x="512" y="494" width="63" height="8" rx="4" fill="#3b9eff"/>
+  <text x="512" y="520" fill="#8b98a8" font-size="11">Boş 8.6 GB / 13.2 GB</text>
+</svg>

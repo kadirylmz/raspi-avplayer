@@ -1,0 +1,73 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1100 500" width="1100" height="500" font-family="system-ui, -apple-system, Segoe UI, Roboto, sans-serif">
+  <rect width="1100" height="500" rx="14" fill="#0d1117"/>
+  <text x="36" y="42" fill="#e6edf3" font-size="20" font-weight="700">Akıllı Video Dönüştürme &amp; Optimizasyon</text>
+
+  <!-- Left Card: Profiles -->
+  <rect x="36" y="64" width="490" height="404" rx="12" fill="#161b22" stroke="#2a3441"/>
+  <text x="56" y="92" fill="#8b98a8" font-size="12" font-weight="600" letter-spacing="1">OPTİMİZASYON PROFİLİ SEÇİMİ</text>
+
+  <rect x="56" y="108" width="450" height="56" rx="8" fill="#10253a" stroke="#3b9eff"/>
+  <circle cx="76" cy="136" r="6" fill="#3b9eff"/>
+  <text x="94" y="131" fill="#e6edf3" font-size="14" font-weight="700">1. Otomatik optimizasyon</text>
+  <text x="94" y="150" fill="#8b98a8" font-size="12">Pi modeline, ekrana ve kaynağa göre en iyi format</text>
+
+  <rect x="56" y="174" width="450" height="56" rx="8" fill="#161b22" stroke="#2a3441"/>
+  <circle cx="76" cy="202" r="6" fill="none" stroke="#8b98a8"/>
+  <text x="94" y="197" fill="#e6edf3" font-size="14" font-weight="700">2. Orijinal kaliteyi koru</text>
+  <text x="94" y="216" fill="#8b98a8" font-size="12">Mümkünse kopyala/remux; gerekirse yüksek kalitede kodla</text>
+
+  <rect x="56" y="240" width="450" height="56" rx="8" fill="#161b22" stroke="#2a3441"/>
+  <circle cx="76" cy="268" r="6" fill="none" stroke="#8b98a8"/>
+  <text x="94" y="263" fill="#e6edf3" font-size="14" font-weight="700">3. 1080p optimize et</text>
+  <text x="94" y="282" fill="#8b98a8" font-size="12">Gerekirse 1920x1080'e indirir (büyütme yok), H.264</text>
+
+  <rect x="56" y="306" width="450" height="56" rx="8" fill="#161b22" stroke="#2a3441"/>
+  <circle cx="76" cy="334" r="6" fill="none" stroke="#8b98a8"/>
+  <text x="94" y="329" fill="#e6edf3" font-size="14" font-weight="700">4. 4K optimize et</text>
+  <text x="94" y="348" fill="#8b98a8" font-size="12">3840x2160'a kadar korur (Pi 4 → HEVC, Pi 5 → H.264/HEVC)</text>
+
+  <rect x="56" y="372" width="450" height="56" rx="8" fill="#161b22" stroke="#2a3441"/>
+  <circle cx="76" cy="400" r="6" fill="none" stroke="#8b98a8"/>
+  <text x="94" y="395" fill="#e6edf3" font-size="14" font-weight="700">5. Özel profil</text>
+  <text x="94" y="414" fill="#8b98a8" font-size="12">Kodek, maksimum çözünürlük/FPS, CRF/bitrate seçimi</text>
+
+  <!-- Right Card: Before / After Analysis -->
+  <rect x="546" y="64" width="518" height="404" rx="12" fill="#161b22" stroke="#2a3441"/>
+  <text x="566" y="92" fill="#8b98a8" font-size="12" font-weight="600" letter-spacing="1">ÖNCE → SONRA ANALİZİ (PI4 / PI5)</text>
+
+  <text x="566" y="126" fill="#8b98a8" font-size="12">Özellik</text>
+  <text x="680" y="126" fill="#8b98a8" font-size="12">Kaynak Dosya</text>
+  <text x="860" y="126" fill="#8b98a8" font-size="12">Hedef (Optimize)</text>
+  <line x1="566" y1="136" x2="1044" y2="136" stroke="#2a3441"/>
+
+  <text x="566" y="162" fill="#8b98a8" font-size="13">Video</text>
+  <text x="680" y="162" fill="#f5a623" font-size="13">ProRes 3840x2160 · VFR</text>
+  <text x="860" y="162" fill="#2ecc71" font-size="13" font-weight="600">HEVC 3840x2160 · 30 fps CFR</text>
+  <line x1="566" y1="176" x2="1044" y2="176" stroke="#2a3441"/>
+
+  <text x="566" y="202" fill="#8b98a8" font-size="13">Renk / Pixel</text>
+  <text x="680" y="202" fill="#f5a623" font-size="13">yuv422p10le</text>
+  <text x="860" y="202" fill="#2ecc71" font-size="13" font-weight="600">yuv420p (Donanım Uyumlu)</text>
+  <line x1="566" y1="216" x2="1044" y2="216" stroke="#2a3441"/>
+
+  <text x="566" y="242" fill="#8b98a8" font-size="13">Ses</text>
+  <text x="680" y="242" fill="#f5a623" font-size="13">PCM 5.1 Kanal · 48000 Hz</text>
+  <text x="860" y="242" fill="#2ecc71" font-size="13" font-weight="600">AAC 192k Stereo · 48000 Hz</text>
+  <line x1="566" y1="256" x2="1044" y2="256" stroke="#2a3441"/>
+
+  <text x="566" y="282" fill="#8b98a8" font-size="13">Container</text>
+  <text x="680" y="282" fill="#e6edf3" font-size="13">MOV</text>
+  <text x="860" y="282" fill="#2ecc71" font-size="13" font-weight="600">MP4 (+faststart)</text>
+
+  <text x="566" y="322" fill="#e6edf3" font-size="13" font-weight="700">HEVC 3840x2160 @ 30 fps, CFR, yuv420p · donanım decode</text>
+  <text x="566" y="344" fill="#8b98a8" font-size="12">• Orijinal dosya originals/ klasöründe korunur</text>
+  <text x="566" y="364" fill="#8b98a8" font-size="12">• Dönüştürülmüş dosya converted/ klasörüne kaydedilir</text>
+
+  <!-- Progress bar & action -->
+  <rect x="566" y="384" width="478" height="10" rx="5" fill="#0a0e14"/>
+  <rect x="566" y="384" width="320" height="10" rx="5" fill="#3b9eff"/>
+  <text x="566" y="410" fill="#8b98a8" font-size="12">Dönüştürülüyor... %67</text>
+
+  <rect x="566" y="422" width="180" height="34" rx="8" fill="#3b9eff"/>
+  <text x="588" y="444" fill="#04111f" font-size="13" font-weight="700">Dönüştürmeyi Başlat</text>
+</svg>

@@ -1,0 +1,27 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>AV Player Kontrol Paneli</title>
+<link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+<header>
+  <div class="brand"><span class="dot" id="hdot"></span> AV&nbsp;PLAYER</div>
+  <nav id="nav">
+    <a href="#/panel" data-p="panel">Panel</a>
+    <a href="#/videos" data-p="videos">Videolar</a>
+    <a href="#/devices" data-p="devices">Cihazlar</a>
+    <a href="#/settings" data-p="settings">Ayarlar</a>
+    <a href="#/logs" data-p="logs">Loglar</a>
+  </nav>
+  <label class="devsel">Yönetilen cihaz: <select id="devsel"></select></label>
+</header>
+<div id="banner"></div>
+<main id="view"></main>
+<div id="toasts"></div>
+<div id="modal" class="modal hidden"><div class="modal-box" id="modalbox"></div></div>
+<script src="/static/app.js"></script>
+</body>
+</html>
