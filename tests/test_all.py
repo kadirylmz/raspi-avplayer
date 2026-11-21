@@ -150,6 +150,7 @@ def test_periodic_reboot_needs_confirmation(client):
 
 
 def test_reboot_requires_confirm_and_commands_queued(client):
+    db.pop_commands()
     assert client.post("/api/player/reboot", json={}).status_code == 400
     assert client.post("/api/player/restart", json={}).status_code == 200
     cmds = db.pop_commands()
