@@ -55,12 +55,13 @@ function route() {
 }
 
 function renderHeroCard(st, full = false) {
-  const p = st.player, sys = st.system, s = st.settings;
+  const p = st.player, s = st.settings;
   const hasLogo = !!s.logo_file, hasBg = !!s.bg_file;
   const compName = s.company_name || "AV PLAYER SYSTEM";
   const subTitle = s.welcome_subtitle || "";
   const bgStyle = hasBg ? `background-image:url('${base}/api/branding/background?t=${encodeURIComponent(s.bg_file)}')` : "";
   const now = new Date();
+  const isCountdown = p.state === "standby" && p.message && /saniye sonra/.test(p.message);
   return `<div class="hero-wrap ${full ? "full" : ""}" id="herocard" style="grid-column:1/-1;${bgStyle}">
     <div class="hero-glass">
       ${hasLogo ? `<img class="hero-logo" src="${base}/api/branding/logo?t=${encodeURIComponent(s.logo_file)}">` : ""}
@@ -68,16 +69,7 @@ function renderHeroCard(st, full = false) {
       ${subTitle ? `<div class="hero-sub">${esc(subTitle)}</div>` : ""}
       ${s.welcome_show_clock !== false ? `<div class="hero-clock">${now.toLocaleTimeString("tr-TR")}</div>
       <div class="hero-date">${now.toLocaleDateString("tr-TR", { weekday: "long", year: "numeric", month: "long", day: "numeric" })}</div>` : `<div style="height:18px"></div>`}
-      <div class="hero-pills">
-        <span class="badge acc" style="padding:5px 14px;font-size:13px">${esc(p.message || "Karşılama & Bekleme Ekranı Aktif")}</span>
-        ${s.welcome_show_ip !== false ? `<span class="badge" style="padding:5px 14px;font-size:13px">${esc(st.name)} · ${sys.ips.join(", ") || "offline"}</span>` : ""}
-        ${sys.temp ? `<span class="badge" style="padding:5px 14px;font-size:13px">${sys.temp} °C</span>` : ""}
-      </div>
-      <div class="row" style="justify-content:center;margin-top:20px">
-        <button class="pri" onclick="pl('play')">▶ Videoyu Şimdi Başlat</button>
-        <button onclick="goFullscreen('#herocard')">⛶ Tam Ekran Yap</button>
-        <button onclick="location.hash='#/settings'">⚙ Arka Plan / Logo Ayarla</button>
-      </div>
+      ${isCountdown ? `<div class="hero-sub" style="margin-top:12px;color:var(--acc);font-weight:600">${esc(p.message)}</div>` : ""}
     </div>
   </div>`;
 }

@@ -75,8 +75,8 @@ def build_standby_args(bg_path: str, sock: str, vo_args: Optional[list[str]] = N
         "--fs", "--no-input-terminal", "--idle=yes", "--force-window=yes",
         "--image-display-duration=inf", "--loop-file=inf",
         "--osd-level=1", "--no-osc", "--no-input-default-bindings", "--input-vo-keyboard=no",
-        "--osd-font-size=36", "--osd-align-x=center", "--osd-align-y=center", "--osd-margin-y=80",
-        "--osd-color=#FFFFFFFF", "--osd-back-color=#B80B1018", "--osd-border-size=2",
+        "--osd-font-size=44", "--osd-align-x=center", "--osd-align-y=center", "--osd-margin-y=55",
+        "--osd-color=#FFFFFFFF", "--osd-back-color=#00000000", "--osd-border-size=2", "--osd-shadow-offset=2",
         "--cursor-autohide=always", "--no-border", "--msg-level=all=warn",
         f"--input-ipc-server={sock}",
     ]
@@ -86,8 +86,8 @@ def build_standby_args(bg_path: str, sock: str, vo_args: Optional[list[str]] = N
 
 def _ensure_standby_bg(s: dict) -> str:
     """Create or pick the 1920x1080 standby background image:
-    - Uses uploaded custom background (bg_file) if present (scaled & cropped to 1920x1080 with a dark vignette card)
-    - Overlays uploaded brand logo (logo_file) centered in the upper card area matching the web layout
+    - Uses uploaded custom background (bg_file) if present (scaled & cropped to 1920x1080 with a centered glass card)
+    - Overlays uploaded brand logo (logo_file) centered in the upper card area matching the web layout 1:1
     """
     logo = s.get("logo_file") or ""
     logo_path = config.DATA_DIR / logo
@@ -101,13 +101,13 @@ def _ensure_standby_bg(s: dict) -> str:
         inputs = []
         if has_bg:
             inputs += ["-i", str(bg_src)]
-            base_chain = "[0:v]scale=1920:1080:force_original_aspect_ratio=increase,crop=1920:1080,eq=brightness=-0.18:saturation=0.9,drawbox=x=310:y=120:w=1300:h=840:color=#0b1018@0.72:t=fill,drawbox=x=310:y=120:w=1300:h=840:color=#3b9eff@0.35:t=2[base]"
+            base_chain = "[0:v]scale=1920:1080:force_original_aspect_ratio=increase,crop=1920:1080,eq=brightness=-0.15:saturation=0.95,drawbox=x=420:y=150:w=1080:h=780:color=#0d131c@0.75:t=fill,drawbox=x=420:y=150:w=1080:h=780:color=#ffffff@0.15:t=2[base]"
         else:
             inputs += ["-f", "lavfi", "-i", "color=c=#0b1018:s=1920x1080:d=1"]
-            base_chain = "[0:v]drawbox=x=310:y=120:w=1300:h=840:color=#131b26@0.92:t=fill,drawbox=x=310:y=120:w=1300:h=840:color=#2a3a4e@0.8:t=2[base]"
+            base_chain = "[0:v]drawbox=x=420:y=150:w=1080:h=780:color=#131b26@0.92:t=fill,drawbox=x=420:y=150:w=1080:h=780:color=#2a3a4e@0.8:t=2[base]"
         if has_logo:
             inputs += ["-i", str(logo_path)]
-            fc = f"{base_chain};[1:v]scale='min(420,iw)':'min(200,ih)':force_original_aspect_ratio=decrease[lg];[base][lg]overlay=(W-w)/2:180"
+            fc = f"{base_chain};[1:v]scale='min(380,iw)':'min(170,ih)':force_original_aspect_ratio=decrease[lg];[base][lg]overlay=(W-w)/2:210"
         else:
             fc = base_chain.replace("[base]", "")
         r = subprocess.run(["ffmpeg", "-hide_banner", "-v", "error", "-y", *inputs,
@@ -397,17 +397,13 @@ class Daemon:
             lines.append(sub)
         lines.append("")
         if s.get("welcome_show_clock", True):
-            lines.append(time.strftime("Saat  %H:%M:%S"))
+            lines.append(time.strftime("%H:%M:%S"))
             lines.append(date_tr)
+        now = time.monotonic()
+        if now < self.boot_welcome_until:
+            rem_w = max(1, int(round(self.boot_welcome_until - now)))
             lines.append("")
-        info = [s.get("device_name") or "AV-Player"]
-        if s.get("welcome_show_ip", True):
-            ip_list = system.ips()
-            if ip_list:
-                info.append("http://" + ip_list[0])
-        lines.append("   ·   ".join(info))
-        if status_note:
-            lines.append(f"[ {status_note} ]")
+            lines.append(f"{rem_w} saniye sonra video başlayacaktır")
         txt = "\n".join(lines)
         if txt != self.last_clock_str:
             self.last_clock_str = txt
