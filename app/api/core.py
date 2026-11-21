@@ -3,11 +3,12 @@ import json
 import logging
 import secrets
 import time
+from pathlib import Path
 from typing import Any
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Request
 from fastapi.concurrency import run_in_threadpool
-from fastapi.responses import PlainTextResponse
+from fastapi.responses import FileResponse, PlainTextResponse
 from pydantic import BaseModel
 
 from .. import audio, config, db, hardware, system
@@ -15,7 +16,7 @@ from .. import audio, config, db, hardware, system
 log = logging.getLogger("avp.api")
 router = APIRouter(prefix="/api")
 
-BOOLS = {"autoplay", "boot_autoplay", "loop", "mute", "prefer_hw_encode", "reset_enabled", "reset_osd", "auth_enabled"}
+BOOLS = {"autoplay", "boot_autoplay", "loop", "mute", "prefer_hw_encode", "reset_enabled", "reset_osd", "welcome_enabled", "welcome_show_clock", "welcome_show_ip", "auth_enabled"}
 
 
 def player_state() -> dict:
@@ -114,6 +115,10 @@ def put_settings(body: SettingsIn):
             x = int(x)
         elif k == "device_name":
             x = str(x).strip()[:40] or "AV-Player"
+        elif k == "company_name":
+            x = str(x).strip()[:80]
+        elif k == "welcome_subtitle":
+            x = str(x).strip()[:120]
         elif k == "reset_osd_text":
             x = str(x).strip()[:160] or "{saniye} saniye sonra sistem yeniden başlatılacaktır"
         db.put(k, x)
@@ -121,6 +126,8 @@ def put_settings(body: SettingsIn):
         (config.RUN_DIR / "boot_reset_done").unlink(missing_ok=True)
         (config.DATA_DIR / ".warm_reboot_done").unlink(missing_ok=True)
         db.add_command("rearm_reset")
+    if any(k in v for k in ("welcome_enabled", "company_name", "welcome_subtitle", "welcome_show_clock", "welcome_show_ip", "device_name")):
+        db.add_command("refresh_welcome")
     log.info("Ayarlar güncellendi: %s", {k: x for k, x in v.items() if k != "api_key"})
     return {"ok": True}
 
@@ -208,3 +215,41 @@ async def hw():
 async def hw_retest():
     caps = await run_in_threadpool(hardware.probe_caps, True)
     return {"caps": caps}
+
+
+@router.put("/branding/logo")
+async def upload_logo(request: Request, filename: str = "logo.png"):
+    ext = Path(filename).suffix.lower()
+    if ext not in (".png", ".jpg", ".jpeg", ".svg", ".webp", ".gif"):
+        raise HTTPException(415, "Logo dosyası PNG, JPG, SVG veya WEBP olmalıdır")
+    data = await request.body()
+    if not data or len(data) > 10 * 1024 * 1024:
+        raise HTTPException(400, "Geçersiz veya çok büyük logo dosyası (maks 10 MB)")
+    for old in config.DATA_DIR.glob("brand_logo.*"):
+        old.unlink(missing_ok=True)
+    dst = config.DATA_DIR / f"brand_logo{ext}"
+    dst.write_bytes(data)
+    db.put("logo_file", dst.name)
+    db.add_command("refresh_welcome")
+    log.info("Kurumsal logo yüklendi: %s (%d bayt)", dst.name, len(data))
+    return {"ok": True, "logo_file": dst.name}
+
+
+@router.delete("/branding/logo")
+@router.post("/branding/logo/delete")
+def delete_logo():
+    for old in config.DATA_DIR.glob("brand_logo.*"):
+        old.unlink(missing_ok=True)
+    db.put("logo_file", "")
+    db.add_command("refresh_welcome")
+    log.info("Kurumsal logo kaldırıldı")
+    return {"ok": True}
+
+
+@router.get("/branding/logo")
+def get_logo():
+    name = db.get("logo_file") or ""
+    p = config.DATA_DIR / name
+    if not name or not p.exists():
+        raise HTTPException(404, "Logo yok")
+    return FileResponse(p, headers={"Cache-Control": "no-store"})

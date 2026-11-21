@@ -73,13 +73,35 @@ function panel() {
     const p = st.player, S = p.stats || {}, sys = st.system, s = st.settings, v = st.video;
     const [lab, cls] = STATES[p.state] || [p.state, ""];
     const rs = p.reset || {};
+    const hasLogo = !!s.logo_file;
+    const compName = s.company_name || "AV PLAYER SYSTEM";
+    const subTitle = s.welcome_subtitle || "";
+    $("#hcompany").textContent = compName;
+    if ($("#hlogo")) {
+      $("#hlogo").style.display = hasLogo ? "" : "none";
+      if (hasLogo && !$("#hlogo").dataset.loaded) { $("#hlogo").src = `${base}/api/branding/logo`; $("#hlogo").dataset.loaded = s.logo_file; }
+    }
+    if ($("#hclock")) $("#hclock").textContent = new Date().toLocaleTimeString("tr-TR") + " · " + new Date().toLocaleDateString("tr-TR");
+    const standbyHtml = (!v || p.state === "idle" || p.state === "ended") ? `
+      <div class="card" style="grid-column:1/-1;text-align:center;padding:28px 18px;background:linear-gradient(145deg,#111822,#161b22);border-color:#2a3a4e">
+        ${hasLogo ? `<img src="${base}/api/branding/logo?t=${encodeURIComponent(s.logo_file)}" style="max-height:110px;max-width:280px;object-fit:contain;margin-bottom:12px">` : ""}
+        <div style="font-size:24px;font-weight:800;letter-spacing:1.5px">${esc(compName)}</div>
+        ${subTitle ? `<div class="mut" style="margin-top:4px">${esc(subTitle)}</div>` : ""}
+        <div style="font-size:38px;font-weight:700;margin:14px 0 4px;color:var(--acc);font-variant-numeric:tabular-nums">${new Date().toLocaleTimeString("tr-TR")}</div>
+        <div class="sm mut">${new Date().toLocaleDateString("tr-TR", { weekday: "long", year: "numeric", month: "long", day: "numeric" })} · ${esc(st.name)} (${sys.ips.join(", ") || "offline"})</div>
+        <div class="sm" style="margin-top:10px"><span class="badge acc">HDMI Karşılama &amp; Bekleme Ekranı Aktif</span> <a href="#/settings" class="sm mut" style="margin-left:8px;color:var(--acc)">Logo / Şirket İsmini Düzenle →</a></div>
+      </div>` : "";
     $("#dash").innerHTML = `
     <div class="grid">
+      ${standbyHtml}
       <div class="card" style="grid-column:1/-1">
-        <div class="row sp"><div><h3>${esc(st.name)} · ${esc(sys.model)}</h3>
-          <div class="big">${esc(v ? v.name : "Video seçilmedi")}</div>
-          <div class="mut">${v ? vinfo(v.conv_probe ? v.conv_probe.video : v.probe && v.probe.video) : ""}</div></div>
-          <div><span class="badge ${cls}" style="font-size:15px;padding:6px 14px">${lab}</span>
+        <div class="row sp"><div class="row" style="gap:14px">
+          ${hasLogo ? `<img src="${base}/api/branding/logo?t=${encodeURIComponent(s.logo_file)}" style="max-height:54px;max-width:140px;object-fit:contain;border-radius:6px">` : ""}
+          <div><h3>${esc(compName)} · ${esc(st.name)} (${esc(sys.model)})</h3>
+          <div class="big">${esc(v ? v.name : "Video seçilmedi (Bekleme Ekranında)")}</div>
+          <div class="mut">${v ? vinfo(v.conv_probe ? v.conv_probe.video : v.probe && v.probe.video) : ""}</div></div></div>
+          <div style="text-align:right"><div style="font-size:20px;font-weight:700;font-variant-numeric:tabular-nums;margin-bottom:6px">${new Date().toLocaleTimeString("tr-TR")}</div>
+          <span class="badge ${cls}" style="font-size:15px;padding:6px 14px">${lab}</span>
           ${p.message ? `<div class="sm mut" style="margin-top:6px;max-width:340px">${esc(p.message)}</div>` : ""}</div></div>
         ${S.duration ? `<div style="margin:12px 0 4px">${bar(S.time_pos / S.duration * 100, 101, 101)}<div class="sm mut row sp"><span>${dur(S.time_pos)}</span><span>${dur(S.duration)}</span></div></div>` : ""}
         <div class="row" style="margin-top:10px">
@@ -317,6 +339,30 @@ async function settings() {
     <p class="sm mut">Sadece bu cihazda gerçekten bulunan çıkışlar listelenir. Pi 5'te 3.5 mm jak yoktur.</p>
     <button class="pri" onclick="saveAudio()">Uygula</button></div>
 
+  <div class="card" style="grid-column:1/-1"><h3>Karşılama &amp; Bekleme Ekranı (Şirket İsmi, Logo ve Saat)</h3>
+    <p class="sm mut">İlk açılışta aktif video yoksa veya oynatma durdurulduğunda hem Raspberry Pi HDMI ekranında hem de Panel Yönetici ekranında bu karşılama alanı gösterilir.</p>
+    <div class="grid" style="grid-template-columns:repeat(auto-fit,minmax(260px,1fr));align-items:start">
+      <div>
+        <p><label>${chk("w_en", s.welcome_enabled !== false)} Video yokken / durdurulduğunda HDMI Karşılama Ekranını göster</label></p>
+        <p>Şirket / Kurum İsmi:<br><input id="w_comp" style="width:100%" value="${esc(s.company_name ?? "AV PLAYER SYSTEM")}" placeholder="Ör. MÜZE & SERGİ TEKNOLOJİLERİ"></p>
+        <p>Alt Başlık / Karşılama Mesajı:<br><input id="w_sub" style="width:100%" value="${esc(s.welcome_subtitle ?? "Profesyonel Medya & Gösterim Sistemi")}" placeholder="Ör. Hoş Geldiniz · Bekleme Modu"></p>
+        <p><label>${chk("w_clk", s.welcome_show_clock !== false)} Bekleme ekranında canlı Saat ve Tarih göster</label></p>
+        <p><label>${chk("w_ip", s.welcome_show_ip !== false)} Bekleme ekranında Cihaz IP adresini göster</label></p>
+        <button class="pri" onclick="saveBranding()">Karşılama Ayarlarını Kaydet</button>
+      </div>
+      <div>
+        <p><b>Kurumsal Logo:</b></p>
+        ${s.logo_file ? `<div style="margin-bottom:10px;padding:12px;background:#0a0e14;border:1px solid var(--line);border-radius:8px;display:inline-block"><img src="${base}/api/branding/logo?t=${Date.now()}" style="max-height:90px;max-width:240px;object-fit:contain;display:block"></div>` : `<p class="sm mut">Henüz logo yüklenmedi.</p>`}
+        <div class="row">
+          <button onclick="$('#logofile').click()">Logo Yükle (PNG / JPG / SVG)</button>
+          <input type="file" id="logofile" accept=".png,.jpg,.jpeg,.svg,.webp" hidden onchange="uploadLogo(this.files[0])">
+          ${s.logo_file ? `<button class="dng" onclick="deleteLogo()">Logoyu Kaldır</button>` : ""}
+        </div>
+        <p class="sm mut" style="margin-top:8px">Yüklenen logo hem web panelinin üst barında ve bekleme kartında hem de Raspberry Pi HDMI karşılama ekranında ortalanarak gösterilir.</p>
+      </div>
+    </div>
+  </div>
+
   <div class="card" style="grid-column:1/-1"><h3>Zamanlı Reset</h3>
     <p><label>${chk("r_en", s.reset_enabled)} Video başladıktan sonra otomatik reset etkin</label></p>
     <p><label>${chk("r_osd", s.reset_osd !== false)} HDMI ekranda yeniden başlatma geri sayım uyarısını göster</label></p>
@@ -359,6 +405,21 @@ const retest = b => { b.disabled = true; b.textContent = "Test ediliyor…"; act
 async function put(values, msg, extra) { return act(() => api("/api/settings", { method: "PUT", json: Object.assign({ values }, extra || {}) }), msg || "Kaydedildi"); }
 const saveGeneral = () => put({ device_name: $("#s_name").value, boot_autoplay: $("#s_boot").checked, autoplay: $("#s_auto").checked, loop: $("#s_loop").checked, video_sync: $("#s_sync").value, hwdec: $("#s_hwdec").value, prefer_hw_encode: $("#s_hwenc").checked });
 const saveAudio = () => put({ audio_output: document.querySelector("input[name=ao]:checked").value }, "Ses çıkışı uygulandı");
+const saveBranding = () => put({ welcome_enabled: $("#w_en").checked, company_name: $("#w_comp").value, welcome_subtitle: $("#w_sub").value, welcome_show_clock: $("#w_clk").checked, welcome_show_ip: $("#w_ip").checked }, "Karşılama ekranı ayarları kaydedildi");
+async function uploadLogo(file) {
+  if (!file) return;
+  await act(async () => {
+    const r = await fetch(`${base}/api/branding/logo?filename=${encodeURIComponent(file.name)}`, { method: "PUT", headers: { "X-API-Key": key() }, body: file });
+    if (!r.ok) { const d = await r.json().catch(() => ({})); throw new Error(d.detail || ("HTTP " + r.status)); }
+    if ($("#hlogo")) delete $("#hlogo").dataset.loaded;
+    settings();
+  }, "Logo yüklendi");
+}
+const deleteLogo = () => confirm("Kurumsal logo kaldırılsın mı?") && act(async () => {
+  await api("/api/branding/logo/delete", { method: "POST" });
+  if ($("#hlogo")) { delete $("#hlogo").dataset.loaded; $("#hlogo").style.display = "none"; }
+  settings();
+}, "Logo kaldırıldı");
 async function saveReset() {
   const sel = $("#r_delay").value, mode = document.querySelector("input[name=rm]:checked").value, rep = $("#r_rep").value, en = $("#r_en").checked, osd = $("#r_osd").checked, txt = $("#r_txt").value;
   const values = { reset_enabled: en, reset_osd: osd, reset_osd_text: txt, reset_mode: mode, reset_delay: sel === "c" ? +$("#r_cust").value : +sel, reset_repeat: rep };

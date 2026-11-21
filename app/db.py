@@ -77,6 +77,12 @@ DEFAULTS: dict[str, Any] = {
     "reset_repeat": "once",            # once | periodic
     "reset_osd": True,                 # show OSD warning on HDMI screen before reset
     "reset_osd_text": "{saniye} saniye sonra sistem yeniden başlatılacaktır",
+    "welcome_enabled": True,           # show welcome/standby screen on HDMI when idle or no video
+    "company_name": "AV PLAYER SYSTEM",
+    "welcome_subtitle": "Profesyonel Medya & Gösterim Sistemi",
+    "welcome_show_clock": True,
+    "welcome_show_ip": True,
+    "logo_file": "",
     "auth_enabled": False,
     "api_key": "",
 }

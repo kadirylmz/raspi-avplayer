@@ -69,6 +69,54 @@ def build_mpv_args(video: str, s: dict, audio_dev: Optional[str], hwdec: str,
     return args
 
 
+def build_standby_args(bg_path: str, sock: str, vo_args: Optional[list[str]] = None) -> list[str]:
+    args = [
+        "mpv", "--no-config", bg_path,
+        "--fs", "--no-input-terminal", "--idle=yes", "--force-window=yes",
+        "--image-display-duration=inf", "--loop-file=inf",
+        "--osd-level=1", "--no-osc", "--no-input-default-bindings", "--input-vo-keyboard=no",
+        "--osd-font-size=40", "--osd-align-x=center", "--osd-align-y=bottom", "--osd-margin-y=50",
+        "--osd-color=#FFFFFFFF", "--osd-back-color=#B0080C12", "--osd-border-size=2",
+        "--cursor-autohide=always", "--no-border", "--msg-level=all=warn",
+        f"--input-ipc-server={sock}",
+    ]
+    args += vo_args if vo_args is not None else ["--vo=gpu", "--gpu-context=drm"]
+    return args
+
+
+def _ensure_standby_bg(s: dict) -> str:
+    """Create or pick the standby background image (uses uploaded brand logo if available, else dark canvas)."""
+    logo = s.get("logo_file") or ""
+    logo_path = config.DATA_DIR / logo
+    bg = config.RUN_DIR / "standby_bg.png"
+    config.RUN_DIR.mkdir(parents=True, exist_ok=True)
+    if logo and logo_path.exists() and logo_path.suffix.lower() in (".png", ".jpg", ".jpeg", ".webp"):
+        # Composite logo centered in upper half of a 1920x1080 dark canvas using ffmpeg
+        try:
+            r = subprocess.run([
+                "ffmpeg", "-hide_banner", "-v", "error", "-y",
+                "-f", "lavfi", "-i", "color=c=#0d1117:s=1920x1080:d=1",
+                "-i", str(logo_path),
+                "-filter_complex", "[1:v]scale='min(460,iw)':'min(240,ih)':force_original_aspect_ratio=decrease[lg];[0:v][lg]overlay=(W-w)/2:160",
+                "-frames:v", "1", str(bg)
+            ], capture_output=True, timeout=15)
+            if r.returncode == 0 and bg.exists():
+                return str(bg)
+        except Exception:
+            pass
+    # Fallback: solid dark slate 1920x1080 frame
+    if not bg.exists():
+        try:
+            subprocess.run([
+                "ffmpeg", "-hide_banner", "-v", "error", "-y",
+                "-f", "lavfi", "-i", "color=c=#0d1117:s=1920x1080:d=1",
+                "-frames:v", "1", str(bg)
+            ], capture_output=True, timeout=10)
+        except Exception:
+            pass
+    return str(bg)
+
+
 def notify(msg: str) -> None:
     addr = os.environ.get("NOTIFY_SOCKET")
     if not addr:
@@ -117,6 +165,9 @@ class Daemon:
         self.tail: deque = deque(maxlen=12)   # last mpv output lines (for crash diagnostics)
         self.boot_reset_done = False          # tracks "once per boot" reset execution
         self.last_osd_rem: Optional[int] = None
+        self.standby_mode = False
+        self.standby_sig: tuple = ()
+        self.last_clock_str = ""
 
     # ---- lifecycle
     def run(self) -> None:
@@ -193,15 +244,21 @@ class Daemon:
         v = db.q1("SELECT * FROM videos WHERE id=?", (vid,)) if vid else None
         if not v:
             self._set("idle", "Aktif video seçilmedi")
+            if s.get("welcome_enabled", True):
+                self._start_standby(s, "Aktif video seçilmedi - Bekleme Ekranı")
             return
         path = v["playable_path"]
         sig = (vid, path)
         if self.blocked == sig:
+            if s.get("welcome_enabled", True) and not self.alive():
+                self._start_standby(s, "Video bekleniyor")
             return
         if v["status"] != "ready" or not path or not Path(path).exists():
             self.blocked = sig
             self._set("error", "Aktif video oynatılamaz durumda (dönüştürme gerekli, bozuk veya dosya yok)")
             log.error("Video başlatılmadı: #%s durum=%s", vid, v["status"])
+            if s.get("welcome_enabled", True):
+                self._start_standby(s, "Aktif video dönüştürme bekliyor")
             return
         key = (path, Path(path).stat().st_mtime)
         if key not in self.checked:  # never autoplay a damaged file
@@ -238,6 +295,7 @@ class Daemon:
         threading.Thread(target=self._reader, args=(self.proc,), daemon=True).start()
         self.started_at = time.monotonic()
         self.play_started = None
+        self.standby_mode = False
         self.running_video, self.running_sig = vid, sig
         self.decoder_errors = 0
         self.last_pos = (None, time.monotonic())
@@ -274,7 +332,62 @@ class Daemon:
         self.proc = None
         self.play_started = None
         self.running_video = None
+        self.standby_mode = False
         self.stats = {}
+
+    def _start_standby(self, s: dict, status_note: str = "Bekleme Modu") -> None:
+        """Display corporate Welcome / Standby screen with logo, company name, live clock and IP on HDMI."""
+        if self.alive() and self.standby_mode:
+            return
+        self._stop_mpv()
+        bg = _ensure_standby_bg(s)
+        vo = shlex.split(os.environ["AVP_MPV_VO_ARGS"]) if os.environ.get("AVP_MPV_VO_ARGS") else None
+        args = build_standby_args(bg, str(config.MPV_SOCK), vo)
+        try:
+            config.MPV_SOCK.unlink(missing_ok=True)
+        except OSError:
+            pass
+        try:
+            self.proc = subprocess.Popen(args, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, errors="replace")
+        except Exception as e:
+            log.warning("Karşılama ekranı başlatılamadı: %s", e)
+            return
+        threading.Thread(target=self._reader, args=(self.proc,), daemon=True).start()
+        self.standby_mode = True
+        self.standby_sig = (s.get("logo_file"), s.get("company_name"), s.get("welcome_subtitle"),
+                            s.get("welcome_show_clock"), s.get("welcome_show_ip"))
+        self.last_clock_str = ""
+        deadline = time.monotonic() + 5.0
+        while time.monotonic() < deadline and self.proc.poll() is None:
+            if self.ipc.connect(0.3):
+                self._update_standby_osd(s, status_note)
+                break
+        log.info("HDMI Karşılama / Bekleme ekranı aktif (%s)", s.get("company_name") or s.get("device_name"))
+
+    def _update_standby_osd(self, s: dict, status_note: str = "") -> None:
+        if not self.ipc.sock:
+            return
+        lines = []
+        comp = (s.get("company_name") or "").strip()
+        sub = (s.get("welcome_subtitle") or "").strip()
+        if comp:
+            lines.append(comp)
+        if sub:
+            lines.append(sub)
+        if s.get("welcome_show_clock", True):
+            lines.append(time.strftime("%H:%M:%S   ·   %d.%m.%Y"))
+        info = [s.get("device_name") or "AV-Player"]
+        if s.get("welcome_show_ip", True):
+            ip_list = system.ips()
+            if ip_list:
+                info.append("Panel: http://" + ip_list[0])
+        if status_note:
+            info.append(status_note)
+        lines.append("  |  ".join(info))
+        txt = "\n".join(lines)
+        if txt != self.last_clock_str:
+            self.last_clock_str = txt
+            self.ipc.set("osd-msg1", txt)
 
     def _failure(self, msg: str) -> None:
         self.fails += 1
@@ -301,7 +414,27 @@ class Daemon:
 
         if self.state == "rebooting":
             return
-        if self.alive():
+        if self.alive() and self.standby_mode:
+            # In standby / welcome screen mode: check if a playable video was activated or play was requested
+            if not s.get("welcome_enabled", True):
+                self._stop_mpv()
+                return
+            vid = s["active_video_id"]
+            if self.want_play and vid and (vid, None) != self.blocked:
+                v = db.q1("SELECT * FROM videos WHERE id=?", (vid,))
+                if v and v["status"] == "ready" and (vid, v["playable_path"]) != self.blocked:
+                    self._stop_mpv()
+                    self._start(s)
+                    return
+            cur_sig = (s.get("logo_file"), s.get("company_name"), s.get("welcome_subtitle"),
+                       s.get("welcome_show_clock"), s.get("welcome_show_ip"))
+            if cur_sig != self.standby_sig:
+                (config.RUN_DIR / "standby_bg.png").unlink(missing_ok=True)
+                self._stop_mpv()
+                self._start_standby(s, self.message or "Bekleme Modu")
+                return
+            self._update_standby_osd(s, self.message or "Bekleme Modu")
+        elif self.alive():
             if (self.running_video != s["active_video_id"]
                     or self.applied.get("video_sync") != s["video_sync"]
                     or self.applied.get("hwdec_s") != s["hwdec"]
@@ -310,16 +443,22 @@ class Daemon:
                     self.hwdec_override = None
                 log.info("Aktif video/ayar değişti, oynatma yeniden başlatılıyor" if self.want_play else "Oynatma durduruldu")
                 self._stop_mpv()
-                self._set("idle" if not self.want_play else "starting", "")
+                self._set("idle" if not self.want_play else "starting", "Durduruldu" if not self.want_play else "")
+                if not self.want_play and s.get("welcome_enabled", True):
+                    self._start_standby(s, "Oynatma Durduruldu - Bekleme Modu")
             else:
                 self._monitor(s, now)
         else:
             if self.proc is not None:  # process exited
                 rc = self.proc.returncode
+                was_standby = self.standby_mode
                 self.ipc.close()
                 self.proc = None
                 self.play_started = None
-                if rc == 0 and not s["loop"]:
+                self.standby_mode = False
+                if was_standby:
+                    pass
+                elif rc == 0 and not s["loop"]:
                     self._set("ended", "Video sona erdi (döngü kapalı)")
                     self.ended_video = self.running_sig[:1]
                     log.info("Video bitti")
@@ -334,6 +473,9 @@ class Daemon:
                     self._start(s)
             elif self.state == "error" and self.want_play and self.running_video is None:
                 self._start(s)  # re-evaluates (blocked signature protects against loops)
+            elif not self.want_play or self.state in ("idle", "ended"):
+                if s.get("welcome_enabled", True):
+                    self._start_standby(s, self.message or "Bekleme Modu")
             if self.state == "ended" and (s["active_video_id"],) != self.ended_video:
                 self._set("starting")
         if now - self.last_state_write > 1:
@@ -528,6 +670,10 @@ class Daemon:
             self.boot_reset_done = False
             if self.play_started is not None:
                 self.play_started = time.monotonic()
+        elif cmd == "refresh_welcome":
+            (config.RUN_DIR / "standby_bg.png").unlink(missing_ok=True)
+            if self.standby_mode:
+                self._stop_mpv()
 
     def _write_state(self, s: dict) -> None:
         now = time.monotonic()
