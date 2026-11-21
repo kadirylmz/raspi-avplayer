@@ -81,9 +81,11 @@ for g in /sys/devices/system/cpu/cpu*/cpufreq/scaling_governor; do
   [[ -w "$g" ]] && echo performance >"$g" || true
 done
 if [[ $KEEP_DESKTOP -eq 0 ]]; then
-  log "Masaüstü kapatılıyor (konsol modu): mpv ekrana doğrudan DRM/KMS ile çizer"
+  log "Masaüstü ve arka plan gereksiz servisler kapatılıyor (maksimum video performansı)"
   systemctl set-default multi-user.target
-  systemctl stop display-manager.service lightdm.service gdm.service wayfire.service 2>/dev/null || true
+  for svc in display-manager.service lightdm.service gdm.service wayfire.service wayvnc.service vncserver-x11-serviced.service bluetooth.service hciuart.service cups.service cups-browsed.service ModemManager.service triggerhappy.service; do
+    systemctl disable --now "$svc" 2>/dev/null || true
+  done
 fi
 # yeniden başlatma/servis kontrolü için kullanıcı müdahalesi gerekmez; servisler root olarak çalışır.
 

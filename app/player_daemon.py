@@ -278,6 +278,10 @@ class Daemon:
             if s.get("welcome_enabled", True):
                 self._start_standby(s, "Aktif video seçilmedi - Bekleme Ekranı")
             return
+        # Kill any lingering standby screen and delete its temp image before starting video playback
+        if self.standby_mode:
+            self._stop_mpv()
+        (config.RUN_DIR / "standby_bg.png").unlink(missing_ok=True)
         path = v["playable_path"]
         sig = (vid, path)
         if self.blocked == sig:
