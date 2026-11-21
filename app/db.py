@@ -109,6 +109,19 @@ def init() -> None:
         c.executescript(SCHEMA)
         if not get("api_key"):
             put("api_key", secrets.token_urlsafe(18))
+        # Otomatik branding tespiti: branding dizininde logo/bg varsa ve ayarlanmamışsa aktif et
+        b_dir = config.BRANDING_DIR
+        if b_dir.exists():
+            if not get("logo_file"):
+                for cand in ("logo.png", "logo.jpg", "logo.jpeg"):
+                    if (b_dir / cand).exists():
+                        put("logo_file", cand)
+                        break
+            if not get("bg_file"):
+                for cand in ("bg.png", "bg.jpg", "bg.jpeg", "background.jpg", "background.png"):
+                    if (b_dir / cand).exists():
+                        put("bg_file", cand)
+                        break
     finally:
         c.close()
 

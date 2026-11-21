@@ -15,6 +15,8 @@ ORIG_DIR = DATA_DIR / "originals"      # uploaded originals are never modified
 CONV_DIR = DATA_DIR / "converted"      # optimized copies
 TMP_DIR = DATA_DIR / "tmp"             # partial uploads / running conversions
 LOG_DIR = DATA_DIR / "logs"
+BRANDING_DIR = DATA_DIR / "branding"   # custom logos and welcome backgrounds
+KIOSK_DIR = DATA_DIR / "kiosk"         # custom Windows kiosk apps (.exe / .zip)
 DB_PATH = DATA_DIR / "avplayer.db"
 HWCAPS_FILE = DATA_DIR / "hwcaps.json"
 
@@ -28,7 +30,7 @@ SERVICE_PLAYER = "avplayer-player.service"
 
 
 def ensure_dirs() -> None:
-    for d in (DATA_DIR, ORIG_DIR, CONV_DIR, TMP_DIR, LOG_DIR):
+    for d in (DATA_DIR, ORIG_DIR, CONV_DIR, TMP_DIR, LOG_DIR, BRANDING_DIR, KIOSK_DIR):
         d.mkdir(parents=True, exist_ok=True)
     try:
         RUN_DIR.mkdir(parents=True, exist_ok=True)

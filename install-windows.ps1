@@ -74,6 +74,22 @@ Write-Host "`n==> [3/5] Veri klasörü ve Başlatıcı (Watchdog) scriptleri haz
 if (-not (Test-Path $DataDir)) {
   New-Item -ItemType Directory -Path $DataDir -Force | Out-Null
 }
+Run-SilentNative { icacls $DataDir /grant "Users:(OI)(CI)F" /T /Q }
+
+# Karşılama Ekranı (Branding) görsellerini hazırla
+$brandingDir = "$DataDir\branding"
+if (-not (Test-Path $brandingDir)) {
+  New-Item -ItemType Directory -Path $brandingDir -Force | Out-Null
+}
+$desktop = [System.Environment]::GetFolderPath("Desktop")
+$logoCand = Join-Path $desktop "unnamed.jpg"
+$bgCand = Join-Path $desktop "immersive-room.jpg"
+if ((Test-Path $logoCand) -and (-not (Test-Path "$brandingDir\logo.jpg"))) {
+  Copy-Item $logoCand "$brandingDir\logo.jpg" -Force -ErrorAction SilentlyContinue
+}
+if ((Test-Path $bgCand) -and (-not (Test-Path "$brandingDir\bg.jpg"))) {
+  Copy-Item $bgCand "$brandingDir\bg.jpg" -Force -ErrorAction SilentlyContinue
+}
 
 $webRunner = "$DataDir\run-web.ps1"
 @"
