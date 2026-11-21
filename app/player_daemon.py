@@ -23,29 +23,35 @@ from . import audio, config, db, hardware, logsetup, media, system
 from .mpv_ipc import MpvError, MpvIPC
 
 log = logging.getLogger("avp.player")
-HWDEC_PREF = ("v4l2request", "v4l2m2m-copy", "drm", "drm-copy")
+HWDEC_PREF = ("drm", "drm-copy", "v4l2m2m", "v4l2m2m-copy", "v4l2request")
 
 
 # ----------------------------------------------------------------- pure helpers
 def choose_hwdec(help_text: str, setting: str) -> str:
     if setting == "no":
         return "no"
-    avail = set(re.findall(r"^\s*([a-z0-9\-]+)\s*$", help_text, re.M))
+    # Match both "  drm" and "  drm - description" formats across mpv versions
+    avail = set(re.findall(r"^\s*([a-z0-9_\-]+)(?:\s|$)", help_text, re.M)) - {"Available"}
     pick = [h for h in HWDEC_PREF if h in avail]
-    return ",".join(pick) if pick else "auto-safe"
+    return ",".join(pick + ["auto-copy"]) if pick else "drm,drm-copy,v4l2m2m,v4l2m2m-copy,auto-copy"
 
 
 def build_mpv_args(video: str, s: dict, audio_dev: Optional[str], hwdec: str,
                    sock: str, vo_args: Optional[list[str]] = None) -> list[str]:
     args = [
         "mpv", "--no-config", video,
+        "--profile=fast",
         "--fs", "--no-input-terminal", "--idle=no", "--force-window=yes",
         "--osd-level=0", "--no-osc", "--no-input-default-bindings", "--input-vo-keyboard=no",
         "--cursor-autohide=always", "--no-border",
         "--start=0", "--save-position-on-quit=no", "--resume-playback=no", "--keep-open=no",
         "--loop-file=" + ("inf" if s["loop"] else "no"),
-        f"--hwdec={hwdec}",
-        f"--video-sync={s['video_sync']}", "--framedrop=vo", "--interpolation=no",
+        f"--hwdec={hwdec}", "--hwdec-codecs=all",
+        "--vd-lavc-dr=yes", "--vd-lavc-threads=4",
+        "--scale=bilinear", "--cscale=bilinear", "--dscale=bilinear",
+        "--dither=no", "--correct-downscaling=no", "--linear-downscaling=no", "--sigmoid-upscaling=no",
+        "--hdr-compute-peak=no", "--deband=no",
+        f"--video-sync={s['video_sync']}", "--framedrop=decoder+vo", "--interpolation=no",
         "--cache=yes", "--demuxer-max-bytes=96MiB", "--demuxer-readahead-secs=15",
         "--audio-channels=stereo", "--audio-buffer=0.3", "--gapless-audio=no",
         f"--volume={int(s['volume'])}", f"--mute={'yes' if s['mute'] else 'no'}",
@@ -55,7 +61,9 @@ def build_mpv_args(video: str, s: dict, audio_dev: Optional[str], hwdec: str,
     if vo_args is not None:
         args += vo_args
     else:
-        args += ["--vo=gpu,drm", "--gpu-context=drm"]
+        # On Pi 4 / Pi 5 console (no X11/Wayland), vo=drm uses DRM/KMS hardware planes directly
+        # (zero GPU shader overhead), falling back to vo=gpu with DRM context if needed.
+        args += ["--vo=drm,gpu", "--gpu-context=drm"]
     if audio_dev:
         args.append(f"--audio-device={audio_dev}")
     return args
@@ -212,7 +220,7 @@ class Daemon:
         self.decoder_errors = 0
         self.tail.clear()
         self.last_pos = (None, time.monotonic())
-        self.applied = {"volume": s["volume"], "mute": s["mute"], "loop": s["loop"], "audio": out["id"] if out else None, "video_sync": s["video_sync"]}
+        self.applied = {"volume": s["volume"], "mute": s["mute"], "loop": s["loop"], "audio": out["id"] if out else None, "video_sync": s["video_sync"], "hwdec_s": s["hwdec"]}
         self.restarts += 1
         self._set("starting", "Video açılıyor")
         if not self.ipc.connect(10):
@@ -261,7 +269,10 @@ class Daemon:
         if self.alive():
             if (self.running_video != s["active_video_id"]
                     or self.applied.get("video_sync") != s["video_sync"]
+                    or self.applied.get("hwdec_s") != s["hwdec"]
                     or not self.want_play):
+                if self.applied.get("hwdec_s") != s["hwdec"] or self.running_video != s["active_video_id"]:
+                    self.hwdec_override = None
                 log.info("Aktif video/ayar değişti, oynatma yeniden başlatılıyor" if self.want_play else "Oynatma durduruldu")
                 self._stop_mpv()
                 self._set("idle" if not self.want_play else "starting", "")
@@ -383,7 +394,8 @@ class Daemon:
     def _command(self, cmd: str, arg) -> None:
         log.info("Komut: %s", cmd)
         if cmd == "play":
-            self.want_play, self.blocked, self.fails, self.next_try = True, None, 0, 0
+            self.want_play, self.blocked, self.fails, self.fast_fails, self.next_try = True, None, 0, 0, 0
+            self.hwdec_override = None
             if self.state in ("ended", "error", "idle"):
                 self._set("starting")
         elif cmd == "stop":
@@ -392,7 +404,8 @@ class Daemon:
             self._set("idle", "Durduruldu")
         elif cmd == "restart":  # PLAYER RESTART
             self._stop_mpv()
-            self.want_play, self.blocked, self.fails, self.next_try = True, None, 0, 0
+            self.want_play, self.blocked, self.fails, self.fast_fails, self.next_try = True, None, 0, 0, 0
+            self.hwdec_override = None
             self._set("starting", "Oynatıcı yeniden başlatılıyor")
         elif cmd == "restart_service":  # PLAYER SERVICE RESTART
             self._exec(["systemctl", "restart", config.SERVICE_PLAYER], "servis yeniden başlatma")

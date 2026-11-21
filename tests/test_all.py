@@ -116,13 +116,13 @@ def test_mpv_args():
     s = {"loop": True, "video_sync": "audio", "volume": 80, "mute": False}
     a = build_mpv_args("/v.mp4", s, "alsa/plughw:CARD=x,DEV=0", "no", "/run/s.sock")
     for need in ("--fs", "--loop-file=inf", "--hwdec=no", "--volume=80", "--audio-device=alsa/plughw:CARD=x,DEV=0",
-                 "--input-ipc-server=/run/s.sock", "--start=0", "--vo=gpu,drm", "--gpu-context=drm"):
+                 "--input-ipc-server=/run/s.sock", "--start=0", "--vo=drm,gpu", "--gpu-context=drm", "--profile=fast"):
         assert need in a
 
 
 def test_choose_hwdec():
-    assert choose_hwdec("Available hwdecs:\n  auto\n  v4l2m2m-copy\n  drm\n", "auto") == "v4l2m2m-copy,drm"
-    assert choose_hwdec("", "auto") == "auto-safe" and choose_hwdec("x", "no") == "no"
+    assert choose_hwdec("Available hwdecs:\n  auto\n  v4l2m2m-copy - V4L2\n  drm - DRM PRIME\n", "auto") == "drm,v4l2m2m-copy,auto-copy"
+    assert "drm" in choose_hwdec("", "auto") and choose_hwdec("x", "no") == "no"
 
 
 # ---- API
