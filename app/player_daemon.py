@@ -73,7 +73,7 @@ def build_standby_args(bg_path: str, sock: str, vo_args: Optional[list[str]] = N
     args = [
         "mpv", "--no-config", bg_path,
         "--fs", "--no-input-terminal", "--idle=yes", "--force-window=yes",
-        "--image-display-duration=inf", "--loop-file=inf",
+        "--image-display-duration=1", "--loop-file=inf",
         "--osd-level=1", "--no-osc", "--no-input-default-bindings", "--input-vo-keyboard=no",
         "--osd-font-size=78", "--osd-bold=yes",
         "--osd-align-x=center", "--osd-align-y=center",
@@ -471,11 +471,15 @@ class Daemon:
         if not self.ipc.sock:
             return
         # Company name, subtitle and date are baked into the rounded glass card by Pillow (_ensure_standby_bg).
-        # With --osd-align-y=center, leading newlines push the 78pt bold live clock down to Y=655 (between subtitle and date).
+        # Calling show-text (in addition to osd-msg1) forces mpv's VO to immediately redraw the frame every second!
         txt = ("\n\n\n" + time.strftime("%H:%M:%S")) if s.get("welcome_show_clock", True) else ""
         if txt != self.last_clock_str:
             self.last_clock_str = txt
             self.ipc.set("osd-msg1", txt)
+            try:
+                self.ipc.command("show-text", txt, 1500, 1)
+            except MpvError:
+                pass
 
     def _failure(self, msg: str) -> None:
         self.fails += 1
