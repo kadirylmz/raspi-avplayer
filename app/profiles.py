@@ -20,6 +20,7 @@ HW = {
     # - HEVC (H.265) hardware decoder up to 4Kp60 (~10% CPU).
     # - H.264 has NO hardware decoder (CPU decode: fine up to 1920x1200@60 or 4K@30, heavy at 4K@60).
     "pi5": {"h264": dict(w=3840, h=2160, fps=30, hw=False), "hevc": dict(w=3840, h=2160, fps=60, hw=True)},
+    "win_pc": {"h264": dict(w=3840, h=2160, fps=60, hw=True), "hevc": dict(w=3840, h=2160, fps=60, hw=True)},
     "other": {"h264": dict(w=1920, h=1200, fps=30, hw=False), "hevc": dict(w=1920, h=1200, fps=30, hw=False)},
 }
 STD_FPS = [(24000, 1001), (24, 1), (25, 1), (30000, 1001), (30, 1), (50, 1), (60000, 1001), (60, 1)]

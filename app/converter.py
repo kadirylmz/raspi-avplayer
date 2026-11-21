@@ -32,7 +32,7 @@ def build_cmd(src: str, dst: str, plan: dict, encoder: str) -> list[str]:
         gop = str(plan["gop"])
         cmd += ["-vf", ",".join(vf), "-r", fps, "-fps_mode", "cfr"]
         mr, buf = plan["maxrate_k"], plan["maxrate_k"] * 2
-        if encoder == "h264_v4l2m2m":
+        if encoder in ("h264_v4l2m2m", "h264_nvenc", "h264_qsv", "h264_amf"):
             cmd += ["-c:v", encoder, "-b:v", f"{plan['hw_bitrate_k']}k", "-g", gop, "-pix_fmt", "yuv420p"]
         elif plan["vcodec"] == "hevc":
             cmd += ["-c:v", "libx265", "-preset", plan["preset"], "-crf", str(plan["crf"]),
@@ -57,9 +57,12 @@ def build_cmd(src: str, dst: str, plan: dict, encoder: str) -> list[str]:
 def pick_encoder(plan: dict, prefer_hw: bool) -> str:
     if plan["vcodec"] == "hevc":
         return "libx265"
-    if (prefer_hw and plan["width"] <= 1920 and plan["height"] <= 1088 and plan["fps"] <= 60
-            and hardware.hw_encoder_usable()):
-        return "h264_v4l2m2m"
+    if prefer_hw:
+        hw_enc = hardware.best_hw_h264_encoder()
+        if hw_enc == "h264_v4l2m2m" and (plan["width"] > 1920 or plan["height"] > 1088 or plan["fps"] > 60):
+            return "libx264"
+        if hw_enc:
+            return hw_enc
     return "libx264"
 
 
@@ -148,7 +151,7 @@ class JobRunner:
             tmp.unlink(missing_ok=True)
             self.cancel_ids.discard(j["id"])
             return self._fail(j, "Kullanıcı iptal etti", cancelled=True)
-        if not ok and encoder == "h264_v4l2m2m":
+        if not ok and encoder in ("h264_v4l2m2m", "h264_nvenc", "h264_qsv", "h264_amf"):
             log.warning("Donanım encoder başarısız (%s) → yazılımsal libx264'e geçiliyor", err[-200:])
             ok, err = self._encode(j, src, tmp, plan, "libx264", dur)
             encoder = "libx264"

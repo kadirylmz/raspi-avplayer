@@ -30,6 +30,7 @@ log = logging.getLogger("avp.player")
 # So passing --hwdec=auto-safe silently falls back to software decode (200% CPU).
 # Passing --hwdec=drm,v4l2m2m activates true zero-copy hardware decoding without any copy overhead.
 HWDEC_PREF = ("drm", "v4l2m2m", "v4l2request")
+HWDEC_PREF_WIN = ("d3d11va", "nvdec", "dxva2", "qsv")
 
 
 # ----------------------------------------------------------------- pure helpers
@@ -37,8 +38,17 @@ def choose_hwdec(help_text: str, setting: str) -> str:
     if setting == "no":
         return "no"
     avail = set(re.findall(r"^\s*([a-z0-9\-]+)(?:\s|\(|$)", help_text, re.M))
+    if os.name == "nt":
+        pick = [h for h in HWDEC_PREF_WIN if h in avail]
+        return ",".join(pick) if pick else "d3d11va,nvdec,dxva2,auto-safe"
     pick = [h for h in HWDEC_PREF if h in avail]
     return ",".join(pick) if pick else "drm,v4l2m2m,auto-safe"
+
+
+def _default_vo_args() -> list[str]:
+    if os.name == "nt":
+        return ["--vo=gpu", "--gpu-context=d3d11", "--ontop"]
+    return ["--vo=gpu", "--gpu-context=drm"]
 
 
 def build_mpv_args(video: str, s: dict, audio_dev: Optional[str], hwdec: str,
@@ -63,7 +73,7 @@ def build_mpv_args(video: str, s: dict, audio_dev: Optional[str], hwdec: str,
     if vo_args is not None:
         args += vo_args
     else:
-        args += ["--vo=gpu", "--gpu-context=drm"]
+        args += _default_vo_args()
     if audio_dev:
         args.append(f"--audio-device={audio_dev}")
     return args
@@ -82,7 +92,7 @@ def build_standby_args(bg_path: str, sock: str, vo_args: Optional[list[str]] = N
         "--cursor-autohide=always", "--no-border", "--msg-level=all=warn",
         f"--input-ipc-server={sock}",
     ]
-    args += vo_args if vo_args is not None else ["--vo=gpu", "--gpu-context=drm"]
+    args += vo_args if vo_args is not None else _default_vo_args()
     return args
 
 
@@ -333,6 +343,8 @@ class Daemon:
 
     def _wait_drm(self, timeout: int = 30) -> None:
         """Wait until DRM/KMS card (/dev/dri/card*) and at least one HDMI connector exist after cold boot."""
+        if os.name == "nt":
+            return
         end = time.time() + timeout
         while time.time() < end:
             notify("WATCHDOG=1")
@@ -420,10 +432,11 @@ class Daemon:
         hwdec = self.hwdec_override or choose_hwdec(self.hw_help, s["hwdec"])
         vo = shlex.split(os.environ["AVP_MPV_VO_ARGS"]) if os.environ.get("AVP_MPV_VO_ARGS") else None
         args = build_mpv_args(path, s, out["mpv_device"] if out else None, hwdec, str(config.MPV_SOCK), vo)
-        try:
-            config.MPV_SOCK.unlink(missing_ok=True)
-        except OSError:
-            pass
+        if os.name != "nt":
+            try:
+                config.MPV_SOCK.unlink(missing_ok=True)
+            except OSError:
+                pass
         log.info("mpv başlatılıyor: video=#%s %s | hwdec=%s | ses=%s", vid, v["name"], hwdec, out["label"] if out else "varsayılan")
         self.tail.clear()
         try:
@@ -482,10 +495,11 @@ class Daemon:
         bg = _ensure_standby_bg(s)
         vo = shlex.split(os.environ["AVP_MPV_VO_ARGS"]) if os.environ.get("AVP_MPV_VO_ARGS") else None
         args = build_standby_args(bg, str(config.MPV_SOCK), vo)
-        try:
-            config.MPV_SOCK.unlink(missing_ok=True)
-        except OSError:
-            pass
+        if os.name != "nt":
+            try:
+                config.MPV_SOCK.unlink(missing_ok=True)
+            except OSError:
+                pass
         try:
             self.proc = subprocess.Popen(args, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, errors="replace")
         except Exception as e:
@@ -769,16 +783,30 @@ class Daemon:
         if mode == "player_restart":
             self._stop_mpv(); self.next_try = 0; self._set("starting", "Zamanlı oynatıcı yeniden başlatma")
         elif mode == "service_restart":
-            self._exec(["systemctl", "restart", config.SERVICE_PLAYER], "servis yeniden başlatma")
+            self._restart_service()
         elif mode == "device_reboot":
             self._set("rebooting", "Cihaz yeniden başlatılıyor")
             self._write_state(s)
+            self._reboot_device()
+
+    def _restart_service(self) -> None:
+        if os.name == "nt":
+            log.warning("Windows player servisi yeniden başlatılıyor")
+            self._stop_mpv()
+            os._exit(0)  # Windows service wrapper / scheduled task loop immediately respawns player_daemon
+        else:
+            self._exec(["systemctl", "restart", config.SERVICE_PLAYER], "servis yeniden başlatma")
+
+    def _reboot_device(self) -> None:
+        if os.name == "nt":
+            self._exec(["shutdown", "/r", "/t", "0", "/f"], "WINDOWS CİHAZ REBOOT")
+        else:
             self._exec(["systemctl", "reboot"], "CİHAZ REBOOT")
 
     def _exec(self, cmd: list[str], what: str) -> None:
         log.warning("Çalıştırılıyor: %s (%s)", " ".join(cmd), what)
         try:
-            subprocess.Popen(cmd, start_new_session=True)
+            subprocess.Popen(cmd, start_new_session=(os.name != "nt"))
         except Exception as e:
             log.error("%s başarısız: %s", what, e)
             self._set("error", f"{what} başarısız: {e}")
@@ -806,10 +834,10 @@ class Daemon:
             self.hwdec_override = None
             self._set("starting", "Oynatıcı yeniden başlatılıyor")
         elif cmd == "restart_service":  # PLAYER SERVICE RESTART
-            self._exec(["systemctl", "restart", config.SERVICE_PLAYER], "servis yeniden başlatma")
+            self._restart_service()
         elif cmd == "reboot":  # DEVICE REBOOT
             self._set("rebooting", "Cihaz yeniden başlatılıyor")
-            self._exec(["systemctl", "reboot"], "CİHAZ REBOOT")
+            self._reboot_device()
         elif cmd == "unblock":
             self.blocked = None
             self.fails = 0

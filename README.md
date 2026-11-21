@@ -57,7 +57,7 @@ Müze, dijital sergi, projeksiyon, immersive alan ve profesyonel AV uygulamalar�
 
 ---
 
-### Adım 2: Windows Bilgisayardan Tek Komutla Kurulum (ve Sabit IP Verme)
+### Adım 2: Windows Bilgisayardan Raspberry Pi'ye Tek Komutla Kurulum (ve Sabit IP Verme)
 Windows bilgisayarınızda **PowerShell**'i açın ve proje klasörüne giderek şu komutu çalıştırın (`192.168.1.190` yerine kendi Pi IP adresinizi yazın):
 
 ```powershell
@@ -76,6 +76,27 @@ Kurulumdan sonra kodda yapılan güncellemeleri 5 saniyede göndermek için:
 ```powershell
 powershell -ExecutionPolicy Bypass -File .\deploy.ps1 -PiIP 192.168.1.190 -Update
 ```
+
+---
+
+### Adım 2B: Aynı Sistemi Doğrudan Windows PC / Mini PC / NUC Üzerine Kurma
+İsterseniz Raspberry Pi yerine (veya Raspberry Pi cihazlarınızla birlikte aynı ağda) herhangi bir **Windows 10 / 11 Mini PC / Media Server** bilgisayara da birebir aynı sistemi tek komutla kurabilirsiniz.
+
+**Yönetici (Administrator) PowerShell** açıp şu komutu çalıştırın:
+```powershell
+cd "C:\Users\kadir\Desktop\Raspi conf\avplayer"
+powershell -ExecutionPolicy Bypass -File .\install-windows.ps1
+```
+*(İsteğe bağlı olarak sabit IP ve port da verebilirsiniz: `.\install-windows.ps1 -Port 80 -StaticIP 192.168.1.220`)*
+
+> **Windows Kurulumu Otomatik Olarak Şunları Yapar:**
+> 1. Python, FFmpeg ve MPV'yi kontrol eder (eksikse `winget` / `static-ffmpeg` ile otomatik kurar).
+> 2. Verileri `C:\ProgramData\AVPlayer` altında yapılandırır, Windows Named Pipe (`\\.\pipe\avplayer-mpv`) ve Direct3D 11 (`--gpu-context=d3d11 --hwdec=d3d11va,nvdec,dxva2`) donanım hızlandırmasını devreye alır.
+> 3. NVIDIA (`h264_nvenc`), Intel QuickSync (`h264_qsv`) veya AMD (`h264_amf`) GPU donanım encoder'larını otomatik test edip video dönüştürmede kullanır.
+> 4. Windows WASAPI ses çıkışlarını (HDMI, Hoparlör/3.5mm, USB DAC) otomatik algılar.
+> 5. 60 saniye reset modlarında **Player Restart**, **Service Restart** ve **Device Reboot (`shutdown /r /t 0 /f`)** birebir aynı şekilde çalışır.
+> 6. Uyku modunu/ekran kapatmayı devre dışı bırakır, güvenlik duvarı portunu açar ve Windows açılışında (`ONLOGON`) otomatik başlayan `AVPlayer-Web` ve `AVPlayer-Player` görevlerini oluşturur.
+> 7. Kaldırmak için: `powershell -ExecutionPolicy Bypass -File .\install-windows.ps1 -Uninstall`
 
 ---
 

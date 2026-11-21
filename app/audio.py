@@ -1,4 +1,5 @@
-"""ALSA output detection (HDMI / analog 3.5mm / USB). Only existing outputs are offered."""
+"""ALSA (Linux/Raspberry Pi) & WASAPI (Windows) audio output detection."""
+import os
 import re
 import subprocess
 from pathlib import Path
@@ -7,17 +8,32 @@ from . import hardware
 
 KIND_LABEL = {"hdmi": "HDMI AUDIO", "analog": "ANALOG AUDIO (3.5 MM JACK)", "usb": "USB AUDIO"}
 CARD_RE = re.compile(r"^card (\d+): (\S+) \[(.*?)\], device (\d+): (.*?) \[(.*?)\]")
+WASAPI_RE = re.compile(r"^\s*'(wasapi/[^']+)'\s*\((.*?)\)")
 
 
 def classify(card_id: str, card_name: str, dev_name: str, is_usb: bool) -> str | None:
     blob = f"{card_id} {card_name} {dev_name}".lower()
-    if is_usb:
+    if is_usb or "usb" in blob or "dac" in blob:
         return "usb"
-    if "hdmi" in blob:
+    if "hdmi" in blob or "displayport" in blob or "nvidia" in blob or "intel(r) display" in blob or "digital audio" in blob:
         return "hdmi"
-    if "headphones" in blob or "bcm2835" in blob or "analog" in blob:
+    if "headphones" in blob or "bcm2835" in blob or "analog" in blob or "speaker" in blob or "hoparl" in blob or "realtek" in blob:
         return "analog"
     return None
+
+
+def parse_wasapi(text: str) -> list[dict]:
+    outs = []
+    for line in text.splitlines():
+        m = WASAPI_RE.match(line)
+        if not m:
+            continue
+        mpv_dev, desc = m.groups()
+        kind = classify("", desc, "", "usb" in desc.lower()) or "analog"
+        oid = f"{kind}:{mpv_dev}"
+        outs.append({"id": oid, "kind": kind, "label": f"{KIND_LABEL[kind]} – {desc}",
+                     "card": mpv_dev, "device": 0, "mpv_device": mpv_dev})
+    return outs
 
 
 def parse_aplay(text: str, model: str, usb_cards: set[str] | None = None) -> list[dict]:
@@ -48,6 +64,16 @@ def parse_aplay(text: str, model: str, usb_cards: set[str] | None = None) -> lis
 
 def list_outputs(model: str | None = None) -> list[dict]:
     model = model or hardware.model()
+    if os.name == "nt":
+        try:
+            text = subprocess.run(["mpv", "--audio-device=help"], capture_output=True, text=True, timeout=10).stdout
+            outs = parse_wasapi(text)
+            if outs:
+                return outs
+        except Exception:
+            pass
+        return [{"id": "auto:wasapi", "kind": "hdmi", "label": "WINDOWS VARSAYILAN SES ÇIKIŞI (WASAPI)",
+                 "card": "auto", "device": 0, "mpv_device": "auto"}]
     try:
         text = subprocess.run(["aplay", "-l"], capture_output=True, text=True, timeout=10).stdout
     except Exception:

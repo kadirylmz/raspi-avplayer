@@ -24,6 +24,10 @@ def _out(cmd: list[str], timeout: int = 20) -> str:
 
 
 def model_name() -> str:
+    if os.name == "nt":
+        import platform
+        cpu = platform.processor() or platform.machine()
+        return os.environ.get("AVP_FORCE_MODEL_NAME", f"Windows PC ({cpu})")
     try:
         return Path("/proc/device-tree/model").read_text().strip("\x00\n ")
     except Exception:
@@ -31,10 +35,12 @@ def model_name() -> str:
 
 
 def model() -> str:
-    """'pi4' | 'pi5' | 'other'"""
+    """'pi4' | 'pi5' | 'win_pc' | 'other'"""
     forced = os.environ.get("AVP_FORCE_MODEL")
     if forced:
         return forced
+    if os.name == "nt":
+        return "win_pc"
     n = model_name()
     if "Raspberry Pi 5" in n or "Compute Module 5" in n:
         return "pi5"
@@ -44,6 +50,9 @@ def model() -> str:
 
 
 def os_pretty() -> str:
+    if os.name == "nt":
+        import platform
+        return f"Windows {platform.release()} ({platform.machine()})"
     try:
         for line in Path("/etc/os-release").read_text().splitlines():
             if line.startswith("PRETTY_NAME="):
@@ -64,7 +73,21 @@ def v4l2_devices() -> list[dict]:
 
 
 def display_info() -> dict:
-    """Connected HDMI outputs and the highest mode each reports (from DRM sysfs)."""
+    """Connected HDMI/Display outputs and the highest mode each reports."""
+    if os.name == "nt":
+        try:
+            import ctypes
+            u32 = ctypes.windll.user32
+            try:
+                u32.SetProcessDPIAware()
+            except Exception:
+                pass
+            w, h = int(u32.GetSystemMetrics(0)), int(u32.GetSystemMetrics(1))
+            if w > 0 and h > 0:
+                return {"outputs": [{"connector": "Display-1", "connected": True, "max_w": w, "max_h": h, "modes": [f"{w}x{h}"]}],
+                        "connected": True, "max_w": w, "max_h": h}
+        except Exception:
+            pass
     outs = []
     for c in sorted(Path("/sys/class/drm").glob("card*-HDMI-A-*")):
         try:
@@ -134,21 +157,30 @@ def probe_caps(force: bool = False, max_age: int = 7 * 86400) -> dict:
     m = model()
     v4 = v4l2_devices()
     names = " ".join(d["name"] for d in v4)
-    caps = {
-        "ts": time.time(), "model": m, "model_name": model_name(),
-        "ffmpeg": (_out(["ffmpeg", "-version"]).splitlines() or ["yok"])[0],
-        "mpv": (_out(["mpv", "--version"]).splitlines() or ["yok"])[0],
-        "v4l2_devices": v4,
-        "encoders": {n: test_encoder(n) for n in ("libx264", "libx265", "h264_v4l2m2m")},
-        "decode": {
+    enc_list = ("libx264", "libx265", "h264_nvenc", "h264_qsv", "h264_amf") if m == "win_pc" else ("libx264", "libx265", "h264_v4l2m2m")
+    hwdecs = [l.strip() for l in _out(["mpv", "--hwdec=help"]).splitlines()
+              if l.strip().startswith(("v4l2", "drm", "d3d11va", "nvdec", "dxva2", "qsv", "auto"))][:12]
+    if m == "win_pc":
+        dec = {
+            "h264_hw": {"works": any("d3d11va" in x or "nvdec" in x or "dxva2" in x for x in hwdecs), "note": "Windows D3D11VA / NVDEC / DXVA2 GPU Decode"},
+            "hevc_hw": {"works": any("d3d11va" in x or "nvdec" in x or "dxva2" in x for x in hwdecs), "note": "Windows D3D11VA / NVDEC / DXVA2 GPU Decode"},
+        }
+    else:
+        dec = {
             "h264_hw": test_hw_decode_h264() if "bcm2835-codec" in names else
             {"works": False, "note": "bcm2835-codec decoder aygıtı yok (Pi 5'te H.264 donanım decoder yoktur)"},
             "hevc_hw": {"works": "rpi-hevc-dec" in names, "verified": False,
                         "note": "rpi-hevc-dec aygıtı mevcut; gerçek doğrulama oynatmada mpv hwdec-current ile yapılır"
                         if "rpi-hevc-dec" in names else "rpi-hevc-dec aygıtı yok"},
-        },
-        "mpv_hwdecs": [l.strip() for l in _out(["mpv", "--hwdec=help"]).splitlines()
-                       if l.strip().startswith(("v4l2", "drm", "auto"))][:12],
+        }
+    caps = {
+        "ts": time.time(), "model": m, "model_name": model_name(),
+        "ffmpeg": (_out(["ffmpeg", "-version"]).splitlines() or ["yok"])[0],
+        "mpv": (_out(["mpv", "--version"]).splitlines() or ["yok"])[0],
+        "v4l2_devices": v4,
+        "encoders": {n: test_encoder(n) for n in enc_list},
+        "decode": dec,
+        "mpv_hwdecs": hwdecs,
     }
     try:
         f.write_text(json.dumps(caps, indent=1))
@@ -159,4 +191,14 @@ def probe_caps(force: bool = False, max_age: int = 7 * 86400) -> dict:
 
 def hw_encoder_usable(caps: Optional[dict] = None) -> bool:
     caps = caps or probe_caps()
-    return bool(caps.get("encoders", {}).get("h264_v4l2m2m", {}).get("works"))
+    encs = caps.get("encoders", {})
+    return any(encs.get(k, {}).get("works") for k in ("h264_v4l2m2m", "h264_nvenc", "h264_qsv", "h264_amf"))
+
+
+def best_hw_h264_encoder(caps: Optional[dict] = None) -> Optional[str]:
+    caps = caps or probe_caps()
+    encs = caps.get("encoders", {})
+    for k in ("h264_nvenc", "h264_qsv", "h264_amf", "h264_v4l2m2m"):
+        if encs.get(k, {}).get("works"):
+            return k
+    return None

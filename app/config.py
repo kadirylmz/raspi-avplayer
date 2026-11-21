@@ -2,10 +2,14 @@
 import os
 from pathlib import Path
 
-APP_VERSION = "1.0.0"
+APP_VERSION = "1.1.0"
+IS_WINDOWS = os.name == "nt"
 
-DATA_DIR = Path(os.environ.get("AVP_DATA", "/var/lib/avplayer"))
-RUN_DIR = Path(os.environ.get("AVP_RUN", "/run/avplayer"))
+_DEFAULT_DATA = os.path.join(os.environ.get("PROGRAMDATA", "C:\\ProgramData"), "AVPlayer") if IS_WINDOWS else "/var/lib/avplayer"
+_DEFAULT_RUN = os.path.join(_DEFAULT_DATA, "run") if IS_WINDOWS else "/run/avplayer"
+
+DATA_DIR = Path(os.environ.get("AVP_DATA", _DEFAULT_DATA))
+RUN_DIR = Path(os.environ.get("AVP_RUN", _DEFAULT_RUN))
 
 ORIG_DIR = DATA_DIR / "originals"      # uploaded originals are never modified
 CONV_DIR = DATA_DIR / "converted"      # optimized copies
@@ -15,7 +19,7 @@ DB_PATH = DATA_DIR / "avplayer.db"
 HWCAPS_FILE = DATA_DIR / "hwcaps.json"
 
 STATE_FILE = RUN_DIR / "state.json"    # written by the player daemon
-MPV_SOCK = RUN_DIR / "mpv.sock"
+MPV_SOCK = Path(r"\\.\pipe\avplayer-mpv") if IS_WINDOWS else (RUN_DIR / "mpv.sock")
 
 UPLOAD_RESERVE_BYTES = 512 * 1024 * 1024   # always keep this much free
 DISK_WARN_PERCENT = 90
