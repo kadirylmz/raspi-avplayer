@@ -271,8 +271,23 @@ class Daemon:
         signal.signal(signal.SIGTERM, lambda *_: setattr(self, "stop_flag", True))
         signal.signal(signal.SIGINT, lambda *_: setattr(self, "stop_flag", True))
         s = db.all_settings()
-        self.want_play = bool(s["boot_autoplay"])
-        log.info("Player servisi başladı (model=%s, boot_autoplay=%s)", hardware.model(), self.want_play)
+        # Always force autoplay on cold boot / service startup unless user explicitly turned boot_autoplay off
+        self.want_play = bool(s.get("boot_autoplay", True))
+        # If active_video_id is missing or invalid, auto-select the most recent ready video so boot playback never fails!
+        vid = s.get("active_video_id")
+        v = db.q1("SELECT * FROM videos WHERE id=?", (vid,)) if vid else None
+        if not v or v["status"] != "ready":
+            fallback = db.q1("SELECT * FROM videos WHERE status='ready' ORDER BY id DESC LIMIT 1")
+            if fallback:
+                db.put("active_video_id", fallback["id"])
+                s["active_video_id"] = fallback["id"]
+                log.info("Aktif video otomatik seçildi: #%s %s", fallback["id"], fallback["name"])
+        # Only reset boot_reset_done if this is a fresh OS boot (uptime < 90s);
+        # also clear any stale commands left over in SQLite from before the power cut.
+        db.pop_commands()
+        if system.snapshot()["uptime"] < 90:
+            (config.RUN_DIR / "boot_reset_done").unlink(missing_ok=True)
+        log.info("Player servisi başladı (model=%s, boot_autoplay=%s, video=%s)", hardware.model(), self.want_play, s.get("active_video_id"))
         notify("READY=1")
         self._wait_drm()
         self._wait_network(5)
@@ -280,8 +295,29 @@ class Daemon:
             self.hw_help = subprocess.run(["mpv", "--hwdec=help"], capture_output=True, text=True, timeout=10).stdout
         except Exception as e:
             log.error("mpv bulunamadı/çalışmıyor: %s", e)
+        # Check and consume warm_reboot_flag right at startup (so we don't even wait for video to start to clear it!)
+        warm_reboot_flag = config.DATA_DIR / ".warm_reboot_done"
+        if warm_reboot_flag.exists():
+            try:
+                flag_age = abs(time.time() - float(warm_reboot_flag.read_text().strip()))
+            except Exception:
+                flag_age = 999999.0
+            warm_reboot_flag.unlink(missing_ok=True)
+            try:
+                os.sync()
+            except AttributeError:
+                pass
+            if flag_age < 180 and s.get("reset_repeat") == "once" and s.get("reset_mode") == "device_reboot":
+                self.boot_reset_done = True
+                try:
+                    (config.RUN_DIR / "boot_reset_done").write_text(str(time.time()))
+                except OSError:
+                    pass
+                log.info("60sn Cihaz Reboot sonrası açılış tamamlandı (bir sonraki fiş çek-tak açılışında tekrar çalışacak)")
+
         boot_sec = int(s.get("welcome_boot_sec") or 0)
-        if s.get("welcome_enabled", True) and boot_sec > 0:
+        # Skip the 30s welcome screen if we just came back from our own 60s device_reboot (go straight to video!)
+        if s.get("welcome_enabled", True) and boot_sec > 0 and not self.boot_reset_done:
             self.boot_welcome_until = time.monotonic() + boot_sec
             self._set("standby", f"Karşılama ekranı ({boot_sec} sn sonra video başlayacak)")
             self._start_standby(s, self.message)
@@ -295,15 +331,15 @@ class Daemon:
         self._stop_mpv()
         log.info("Player servisi durduruldu")
 
-    def _wait_drm(self, timeout: int = 20) -> None:
+    def _wait_drm(self, timeout: int = 30) -> None:
         """Wait until DRM/KMS card (/dev/dri/card*) and at least one HDMI connector exist after cold boot."""
         end = time.time() + timeout
         while time.time() < end:
             notify("WATCHDOG=1")
-            cards = list(Path("/dev/dri").glob("card*"))
-            if cards:
+            cards = [c for c in Path("/dev/dri").glob("card*") if os.access(c, os.R_OK | os.W_OK)]
+            if cards and Path("/sys/class/drm").exists():
                 disp = hardware.display_info()
-                if disp.get("connected") or time.time() + 5 >= end:
+                if disp.get("connected") or time.time() - (end - timeout) >= 6:
                     log.info("DRM ekran hazır: %s (bağlı=%s)", [c.name for c in cards], disp.get("connected"))
                     return
             time.sleep(1)
@@ -657,16 +693,25 @@ class Daemon:
                     self.ipc.set("osd-msg1", "")
                 return
             if s["reset_mode"] == "device_reboot" and warm_reboot_flag.exists():
-                # We just came back from our own 60s device_reboot! Mark this boot done and remove the warm flag
-                # so the NEXT time power is unplugged and plugged back in, it WILL reboot after 60s again!
-                warm_reboot_flag.unlink(missing_ok=True)
-                self.boot_reset_done = True
+                # Only treat warm_reboot_flag as our own post-reboot if it was written within the last 180 seconds!
+                # If the user unplugged power hours/minutes later, or if the file is older, ignore it and DO the 60s reset.
                 try:
-                    boot_flag.write_text(str(time.time()))
-                except OSError:
+                    flag_age = abs(time.time() - float(warm_reboot_flag.read_text().strip()))
+                except Exception:
+                    flag_age = 999999.0
+                warm_reboot_flag.unlink(missing_ok=True)
+                try:
+                    os.sync()
+                except AttributeError:
                     pass
-                log.info("60sn Cihaz Reboot sonrası açılış tamamlandı (bir sonraki fiş çek-tak açılışında tekrar çalışacak)")
-                return
+                if flag_age < 180:
+                    self.boot_reset_done = True
+                    try:
+                        boot_flag.write_text(str(time.time()))
+                    except OSError:
+                        pass
+                    log.info("60sn Cihaz Reboot sonrası açılış tamamlandı (bir sonraki fiş çek-tak açılışında tekrar çalışacak)")
+                    return
         delay = max(int(s["reset_delay"]), 5)
         elapsed = now - self.play_started
         rem = int(round(delay - elapsed))
@@ -717,7 +762,8 @@ class Daemon:
             if mode == "device_reboot":
                 try:
                     warm_reboot_flag.write_text(str(time.time()))
-                except OSError:
+                    os.sync()
+                except Exception:
                     pass
         self.play_started = None  # periodic: timer restarts with the next playback start
         if mode == "player_restart":
