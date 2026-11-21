@@ -123,8 +123,8 @@ def test_mpv_args():
 
 
 def test_choose_hwdec():
-    assert choose_hwdec("Available hwdecs:\n  auto\n  v4l2m2m-copy\n  drm\n", "auto") == "v4l2m2m-copy,drm"
-    assert choose_hwdec("", "auto") == "auto-safe" and choose_hwdec("x", "no") == "no"
+    assert choose_hwdec("Valid values:\n  v4l2m2m (h264_v4l2m2m-v4l2m2m)\n  drm (hevc-drm)\n", "auto") == "drm,v4l2m2m"
+    assert "drm" in choose_hwdec("", "auto") and choose_hwdec("x", "no") == "no"
 
 
 # ---- API

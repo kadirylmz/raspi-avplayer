@@ -23,16 +23,22 @@ from . import audio, config, db, hardware, logsetup, media, system
 from .mpv_ipc import MpvError, MpvIPC
 
 log = logging.getLogger("avp.player")
-HWDEC_PREF = ("v4l2request", "v4l2m2m-copy", "drm", "drm-copy")
+# On Raspberry Pi OS mpv --hwdec=help lists:
+#   v4l2m2m (h264_v4l2m2m-v4l2m2m)   <- zero-copy H.264 hardware decoder on Pi 4
+#   drm (hevc-drm)                   <- zero-copy HEVC hardware decoder on Pi 4 & Pi 5
+# Notice that mpv's built-in "auto-safe" WHITELIST does NOT include v4l2m2m or drm!
+# So passing --hwdec=auto-safe silently falls back to software decode (200% CPU).
+# Passing --hwdec=drm,v4l2m2m activates true zero-copy hardware decoding without any copy overhead.
+HWDEC_PREF = ("drm", "v4l2m2m", "v4l2request")
 
 
 # ----------------------------------------------------------------- pure helpers
 def choose_hwdec(help_text: str, setting: str) -> str:
     if setting == "no":
         return "no"
-    avail = set(re.findall(r"^\s*([a-z0-9\-]+)\s*$", help_text, re.M))
+    avail = set(re.findall(r"^\s*([a-z0-9\-]+)(?:\s|\(|$)", help_text, re.M))
     pick = [h for h in HWDEC_PREF if h in avail]
-    return ",".join(pick) if pick else "auto-safe"
+    return ",".join(pick) if pick else "drm,v4l2m2m,auto-safe"
 
 
 def build_mpv_args(video: str, s: dict, audio_dev: Optional[str], hwdec: str,
