@@ -38,7 +38,15 @@ async def auth(request: Request, call_next):
 
 @app.get("/")
 def index():
-    return FileResponse(STATIC / "index.html", headers={"Cache-Control": "no-cache"})
+    return FileResponse(STATIC / "index.html", headers={"Cache-Control": "no-store, no-cache, must-revalidate"})
+
+
+@app.middleware("http")
+async def nocache_static(request: Request, call_next):
+    resp = await call_next(request)
+    if request.url.path.startswith("/static/"):
+        resp.headers["Cache-Control"] = "no-store, no-cache, must-revalidate"
+    return resp
 
 
 app.mount("/static", StaticFiles(directory=STATIC), name="static")

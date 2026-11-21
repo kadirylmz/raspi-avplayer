@@ -35,7 +35,7 @@ if ($Enable4kp60) { $flags += " --enable-4kp60" }
 
 Write-Host "`n[2/3] Pi üzerinde kurulum/güncelleme uygulanıyor..." -ForegroundColor Cyan
 if ($Update) {
-  $remote = "rm -rf ~/avplayer && mkdir -p ~/avplayer && tar -xzf ~/avplayer_deploy.tar.gz -C ~/avplayer && rm -f ~/avplayer_deploy.tar.gz && cd ~/avplayer && sed -i 's/\r$//' install.sh uninstall.sh scripts/*.sh && sudo rsync -a --delete --exclude venv --exclude __pycache__ ~/avplayer/app /opt/avplayer/ && sudo install -m 644 ~/avplayer/systemd/*.service /etc/systemd/system/ && for g in /sys/devices/system/cpu/cpu*/cpufreq/scaling_governor; do [ -w `$g ] && echo performance | sudo tee `$g >/dev/null; done && sudo systemctl daemon-reload && sudo systemctl restart avplayer-web.service avplayer-player.service && sleep 3 && sudo journalctl -u avplayer-player.service -n 15 --no-pager"
+  $remote = "sudo tar -xzf ~/avplayer_deploy.tar.gz -C /opt/avplayer && rm -f ~/avplayer_deploy.tar.gz && sudo find /opt/avplayer/app -name '*.pyc' -delete && sudo install -m 644 /opt/avplayer/systemd/*.service /etc/systemd/system/ && sudo systemctl daemon-reload && sudo systemctl restart avplayer-web.service avplayer-player.service && sleep 2 && sudo journalctl -u avplayer-player.service -n 15 --no-pager"
 } else {
   $remote = "rm -rf ~/avplayer && mkdir -p ~/avplayer && tar -xzf ~/avplayer_deploy.tar.gz -C ~/avplayer && rm -f ~/avplayer_deploy.tar.gz && cd ~/avplayer && sed -i 's/\r$//' install.sh uninstall.sh scripts/*.sh && chmod +x install.sh uninstall.sh scripts/*.sh && sudo ./install.sh$flags"
 }
