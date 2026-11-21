@@ -429,35 +429,39 @@ class Daemon:
             "service_restart": "Video oynatma servisi yeniden başlatılacaktır",
             "device_reboot": "Cihaz (Raspberry Pi) yeniden başlatılacaktır",
         }.get(mode, "Sistem yeniden başlatılacaktır")
+        tpl = str(s.get("reset_osd_text") or "").strip() or "{saniye} saniye sonra sistem yeniden başlatılacaktır"
+
+        def _fmt_osd(sec: int) -> str:
+            dk = max(1, round(sec / 60))
+            sure = f"{sec // 60} dakika" if sec >= 60 and sec % 60 == 0 else f"{sec} saniye"
+            out = (tpl.replace("{saniye}", str(sec))
+                      .replace("{sn}", str(sec))
+                      .replace("{dakika}", str(dk))
+                      .replace("{dk}", str(dk))
+                      .replace("{sure}", sure)
+                      .replace("{mod}", mode_tr))
+            # If user didn't put any placeholder, append remaining seconds so countdown is still visible
+            if not any(p in tpl for p in ("{saniye}", "{sn}", "{dakika}", "{dk}", "{sure}")):
+                out = f"{out} ({sec} sn)"
+            return out
+
         if elapsed < delay:
             # Show Turkish OSD message directly on Raspberry Pi HDMI screen (and web panel status)
-            self.message = f"{rem} saniye sonra {mode_tr.lower()}"
+            txt = _fmt_osd(rem)
+            self.message = txt
             if s.get("reset_osd", True) and self.ipc.sock and rem != self.last_osd_rem:
                 self.last_osd_rem = rem
-                if elapsed <= 10:
-                    if delay == 60:
-                        txt = f"BİLGİ: 1 dakika sonra {mode_tr.lower()} ({rem} sn)"
-                    elif delay % 60 == 0:
-                        txt = f"BİLGİ: {delay // 60} dakika sonra {mode_tr.lower()} ({rem} sn)"
-                    else:
-                        txt = f"BİLGİ: {delay} saniye sonra {mode_tr.lower()} ({rem} sn)"
+                if elapsed <= 10 or rem in (30, 15) or 1 <= rem <= 10:
                     self.ipc.set("osd-msg1", txt)
                     try:
                         self.ipc.command("show-text", txt, 2000, 1)
-                    except MpvError:
-                        pass
-                elif rem in (30, 15) or 1 <= rem <= 10:
-                    txt = f"UYARI: {rem} saniye sonra {mode_tr.lower()}..."
-                    self.ipc.set("osd-msg1", txt)
-                    try:
-                        self.ipc.command("show-text", txt, 1500, 1)
                     except MpvError:
                         pass
                 else:
                     self.ipc.set("osd-msg1", "")
             return
         if s.get("reset_osd", True) and self.ipc.sock:
-            txt = f"ŞİMDİ YENİDEN BAŞLATILIYOR: {mode_tr}"
+            txt = _fmt_osd(0)
             self.ipc.set("osd-msg1", txt)
             try:
                 self.ipc.command("show-text", txt, 3000, 1)

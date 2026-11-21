@@ -319,7 +319,10 @@ async function settings() {
 
   <div class="card" style="grid-column:1/-1"><h3>Zamanlı Reset</h3>
     <p><label>${chk("r_en", s.reset_enabled)} Video başladıktan sonra otomatik reset etkin</label></p>
-    <p><label>${chk("r_osd", s.reset_osd !== false)} HDMI ekranda yeniden başlatma geri sayım uyarısını göster (ör. "1 dk sonra yeniden başlatılacak")</label></p>
+    <p><label>${chk("r_osd", s.reset_osd !== false)} HDMI ekranda yeniden başlatma geri sayım uyarısını göster</label></p>
+    <p>Ekranda görünecek uyarı metni:<br>
+      <input id="r_txt" style="width:100%;max-width:560px" value="${esc(s.reset_osd_text || "{saniye} saniye sonra sistem yeniden başlatılacaktır")}">
+      <br><span class="sm mut">İpucu: Metin içinde <code>{saniye}</code> (kalan sn) veya <code>{sure}</code> (ör. "1 dakika" / "45 saniye") kullanabilirsiniz. Hiçbirini yazmazsanız sonuna otomatik <code>(60 sn)</code> eklenir.</span></p>
     ${[["player_restart", "A) PLAYER RESTART", "Sadece mpv oynatma süreci yeniden başlar. Cihaz ve servis çalışmaya devam eder."], ["service_restart", "B) PLAYER SERVICE RESTART", "avplayer-player systemd servisi yeniden başlar ve video tekrar başlatılır."], ["device_reboot", "C) DEVICE REBOOT", "Raspberry Pi işletim sistemi GERÇEKTEN yeniden başlar. Video kesilir, açılışta otomatik başlar."]].map(m => `
       <label class="opt reset-mode ${m[0] === "device_reboot" ? "reboot" : ""} ${s.reset_mode === m[0] ? "on" : ""}"><input type="radio" name="rm" value="${m[0]}" ${s.reset_mode === m[0] ? "checked" : ""}><span><b>${m[1]}</b><br><span class="sm mut">${m[2]}</span></span></label>`).join("")}
     <div class="row"><span>Süre:</span><select id="r_delay" onchange="$('#r_cust').style.display=this.value==='c'?'':'none'">
@@ -357,8 +360,8 @@ async function put(values, msg, extra) { return act(() => api("/api/settings", {
 const saveGeneral = () => put({ device_name: $("#s_name").value, boot_autoplay: $("#s_boot").checked, autoplay: $("#s_auto").checked, loop: $("#s_loop").checked, video_sync: $("#s_sync").value, hwdec: $("#s_hwdec").value, prefer_hw_encode: $("#s_hwenc").checked });
 const saveAudio = () => put({ audio_output: document.querySelector("input[name=ao]:checked").value }, "Ses çıkışı uygulandı");
 async function saveReset() {
-  const sel = $("#r_delay").value, mode = document.querySelector("input[name=rm]:checked").value, rep = $("#r_rep").value, en = $("#r_en").checked, osd = $("#r_osd").checked;
-  const values = { reset_enabled: en, reset_osd: osd, reset_mode: mode, reset_delay: sel === "c" ? +$("#r_cust").value : +sel, reset_repeat: rep };
+  const sel = $("#r_delay").value, mode = document.querySelector("input[name=rm]:checked").value, rep = $("#r_rep").value, en = $("#r_en").checked, osd = $("#r_osd").checked, txt = $("#r_txt").value;
+  const values = { reset_enabled: en, reset_osd: osd, reset_osd_text: txt, reset_mode: mode, reset_delay: sel === "c" ? +$("#r_cust").value : +sel, reset_repeat: rep };
   let confirmReboot = false;
   if (en && mode === "device_reboot") {
     if (!confirm("DİKKAT: Seçili mod CİHAZ REBOOT. Raspberry Pi gerçekten yeniden başlayacak ve video kesilecek." + (rep === "periodic" ? "\n\nPeriyodik modda cihaz her açılışta tekrar reboot eder (sürekli döngü)!" : ""))) return;

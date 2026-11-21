@@ -114,6 +114,8 @@ def put_settings(body: SettingsIn):
             x = int(x)
         elif k == "device_name":
             x = str(x).strip()[:40] or "AV-Player"
+        elif k == "reset_osd_text":
+            x = str(x).strip()[:160] or "{saniye} saniye sonra sistem yeniden başlatılacaktır"
         db.put(k, x)
     if any(k.startswith("reset_") for k in v):
         (config.RUN_DIR / "boot_reset_done").unlink(missing_ok=True)

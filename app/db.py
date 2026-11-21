@@ -76,6 +76,7 @@ DEFAULTS: dict[str, Any] = {
     "reset_delay": 60,
     "reset_repeat": "once",            # once | periodic
     "reset_osd": True,                 # show OSD warning on HDMI screen before reset
+    "reset_osd_text": "{saniye} saniye sonra sistem yeniden başlatılacaktır",
     "auth_enabled": False,
     "api_key": "",
 }
