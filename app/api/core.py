@@ -15,7 +15,7 @@ from .. import audio, config, db, hardware, system
 log = logging.getLogger("avp.api")
 router = APIRouter(prefix="/api")
 
-BOOLS = {"autoplay", "boot_autoplay", "loop", "mute", "prefer_hw_encode", "reset_enabled", "auth_enabled"}
+BOOLS = {"autoplay", "boot_autoplay", "loop", "mute", "prefer_hw_encode", "reset_enabled", "reset_osd", "auth_enabled"}
 
 
 def player_state() -> dict:

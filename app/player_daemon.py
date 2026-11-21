@@ -47,6 +47,8 @@ def build_mpv_args(video: str, s: dict, audio_dev: Optional[str], hwdec: str,
         "mpv", "--no-config", video,
         "--fs", "--no-input-terminal", "--idle=no", "--force-window=yes",
         "--osd-level=0", "--no-osc", "--no-input-default-bindings", "--input-vo-keyboard=no",
+        "--osd-font-size=32", "--osd-align-x=right", "--osd-align-y=top", "--osd-margin-x=36", "--osd-margin-y=28",
+        "--osd-back-color=#B0000000", "--osd-border-size=2",
         "--cursor-autohide=always", "--no-border",
         "--start=0", "--save-position-on-quit=no", "--resume-playback=no", "--keep-open=no",
         "--loop-file=" + ("inf" if s["loop"] else "no"),
@@ -114,6 +116,7 @@ class Daemon:
         self.ended_video: tuple = ()
         self.tail: deque = deque(maxlen=12)   # last mpv output lines (for crash diagnostics)
         self.boot_reset_done = False          # tracks "once per boot" reset execution
+        self.last_osd_rem: Optional[int] = None
 
     # ---- lifecycle
     def run(self) -> None:
@@ -403,9 +406,35 @@ class Daemon:
                 log.info("60sn Cihaz Reboot sonrası açılış tamamlandı (bir sonraki fiş çek-tak açılışında tekrar çalışacak)")
                 return
         delay = max(int(s["reset_delay"]), 5)
-        if now - self.play_started < delay:
-            return
+        elapsed = now - self.play_started
+        rem = int(round(delay - elapsed))
         mode = s["reset_mode"]
+        mode_tr = {
+            "player_restart": "Oynatıcı yeniden başlatılacak",
+            "service_restart": "Oynatma servisi yeniden başlatılacak",
+            "device_reboot": "Cihaz yeniden başlatılacak",
+        }.get(mode, "Yeniden başlatılacak")
+        if elapsed < delay:
+            # Show on-screen OSD notification on HDMI display at start (first 6s) and final 10s countdown
+            if s.get("reset_osd", True) and self.ipc.sock and rem != self.last_osd_rem:
+                self.last_osd_rem = rem
+                if elapsed <= 6:
+                    txt = f"⏱ {delay // 60} dk sonra: {mode_tr} ({rem} sn)" if delay % 60 == 0 else f"⏱ {rem} sn sonra: {mode_tr}"
+                    try:
+                        self.ipc.command("show-text", txt, 1500, 1)
+                    except MpvError:
+                        pass
+                elif rem in (30, 15) or 1 <= rem <= 10:
+                    try:
+                        self.ipc.command("show-text", f"⏱ {rem} saniye sonra {mode_tr.lower()}...", 1300, 1)
+                    except MpvError:
+                        pass
+            return
+        if s.get("reset_osd", True) and self.ipc.sock:
+            try:
+                self.ipc.command("show-text", f"↻ {mode_tr}...", 2000, 1)
+            except MpvError:
+                pass
         log.warning("ZAMANLI RESET tetiklendi: mod=%s, gecikme=%ss, tekrar=%s", mode, delay, s["reset_repeat"])
         if s["reset_repeat"] == "once":
             self.boot_reset_done = True

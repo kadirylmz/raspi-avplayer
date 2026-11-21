@@ -74,6 +74,7 @@ DEFAULTS: dict[str, Any] = {
     "reset_mode": "player_restart",    # player_restart | service_restart | device_reboot
     "reset_delay": 60,
     "reset_repeat": "once",            # once | periodic
+    "reset_osd": True,                 # show OSD warning on HDMI screen before reset
     "auth_enabled": False,
     "api_key": "",
 }
