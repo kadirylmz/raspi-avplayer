@@ -75,8 +75,10 @@ def build_standby_args(bg_path: str, sock: str, vo_args: Optional[list[str]] = N
         "--fs", "--no-input-terminal", "--idle=yes", "--force-window=yes",
         "--image-display-duration=inf", "--loop-file=inf",
         "--osd-level=1", "--no-osc", "--no-input-default-bindings", "--input-vo-keyboard=no",
-        "--osd-font-size=40", "--osd-align-x=center", "--osd-align-y=center",
-        "--osd-color=#FFFFFFFF", "--osd-back-color=#00000000", "--osd-border-size=0", "--osd-shadow-offset=0",
+        "--osd-font-size=78", "--osd-bold=yes",
+        "--osd-align-x=center", "--osd-align-y=top", "--osd-margin-y=615",
+        "--osd-color=#FFFFFFFF", "--osd-back-color=#00000000",
+        "--osd-border-size=2", "--osd-border-color=#663B9EFF", "--osd-shadow-offset=3", "--osd-shadow-color=#99000000",
         "--cursor-autohide=always", "--no-border", "--msg-level=all=warn",
         f"--input-ipc-server={sock}",
     ]
@@ -84,62 +86,128 @@ def build_standby_args(bg_path: str, sock: str, vo_args: Optional[list[str]] = N
     return args
 
 
-def _make_rounded_card_Filter() -> str:
-    """FFmpeg filter chain that blurs & darkens the center card area (x=440, y=135, w=1040, h=810)
-    with a soft border and drop shadow, matching the Web CSS .hero-glass (backdrop-filter: blur(16px))."""
-    return (
-        "split=2[bg][fg];"
-        "[fg]crop=1040:810:440:135,boxblur=20:2,colorlevels=romax=0.32:gomax=0.36:bomax=0.44,"
-        "drawbox=x=0:y=0:w=1040:h=810:color=#0c121b@0.78:t=fill,"
-        "drawbox=x=0:y=0:w=1040:h=810:color=#ffffff@0.18:t=3[card];"
-        "[bg]drawbox=x=452:y=150:w=1040:h=810:color=#000000@0.48:t=fill[bgs];"
-        "[bgs][card]overlay=440:135"
+def _load_font(size: int, bold: bool = False):
+    from PIL import ImageFont
+    names = (
+        ["DejaVuSans-Bold.ttf", "FreeSansBold.ttf", "LiberationSans-Bold.ttf", "arialbd.ttf"]
+        if bold else
+        ["DejaVuSans.ttf", "FreeSans.ttf", "LiberationSans-Regular.ttf", "arial.ttf"]
     )
+    dirs = ["/usr/share/fonts/truetype/dejavu", "/usr/share/fonts/truetype/freefont",
+            "/usr/share/fonts/truetype/liberation", "C:/Windows/Fonts"]
+    for d in dirs:
+        for n in names:
+            p = Path(d) / n
+            if p.exists():
+                try:
+                    return ImageFont.truetype(str(p), size)
+                except Exception:
+                    pass
+    return ImageFont.load_default()
 
 
 def _ensure_standby_bg(s: dict) -> str:
-    """Create the 1920x1080 standby background image matching the Web .hero-wrap + .hero-glass 1:1:
-    - Full-screen background image (or radial dark slate)
-    - Real frosted glass (boxblur=20) inside the centered card (x=440, y=135, w=1040, h=810) with drop shadow
-    - Uploaded brand logo centered at the top of the card
+    """Render a pixel-perfect 1920x1080 standby image using Pillow matching Web CSS (.hero-wrap + .hero-glass):
+    - Full-screen background image (or dark slate gradient)
+    - True rounded-rectangle card (radius=36px) with Gaussian-blurred frosted glass & drop shadow
+    - Uploaded brand logo centered at top of card
+    - Company Name (bold 42px white), Subtitle (21px muted blue-gray), and Turkish Date (19px muted) baked into the card
+    - Leaving a clean center slot where mpv renders ONLY the large 78pt bold HH:MM:SS live clock!
     """
+    bg = config.RUN_DIR / "standby_bg.png"
+    config.RUN_DIR.mkdir(parents=True, exist_ok=True)
     logo = s.get("logo_file") or ""
     logo_path = config.DATA_DIR / logo
     bg_name = s.get("bg_file") or ""
     bg_src = config.DATA_DIR / bg_name
-    bg = config.RUN_DIR / "standby_bg.png"
-    config.RUN_DIR.mkdir(parents=True, exist_ok=True)
-    has_bg = bool(bg_name and bg_src.exists() and bg_src.suffix.lower() in (".png", ".jpg", ".jpeg", ".webp"))
-    has_logo = bool(logo and logo_path.exists() and logo_path.suffix.lower() in (".png", ".jpg", ".jpeg", ".webp"))
-    glass = _make_rounded_card_Filter()
     try:
-        inputs = []
-        if has_bg:
-            inputs += ["-i", str(bg_src)]
-            base_chain = f"[0:v]scale=1920:1080:force_original_aspect_ratio=increase,crop=1920:1080,eq=brightness=-0.10:saturation=0.95,{glass}[base]"
+        from PIL import Image, ImageDraw, ImageEnhance, ImageFilter
+        W, H = 1920, 1080
+        if bg_name and bg_src.exists():
+            im = Image.open(bg_src).convert("RGB")
+            scale = max(W / im.width, H / im.height)
+            nw, nh = int(im.width * scale), int(im.height * scale)
+            im = im.resize((nw, nh), Image.LANCZOS)
+            left, top = (nw - W) // 2, (nh - H) // 2
+            im = im.crop((left, top, left + W, top + H))
+            im = ImageEnhance.Brightness(im).enhance(0.62)
         else:
-            inputs += ["-f", "lavfi", "-i", "color=c=#0b1018:s=1920x1080:d=1"]
-            base_chain = "[0:v]drawbox=x=440:y=135:w=1040:h=810:color=#111926@0.94:t=fill,drawbox=x=440:y=135:w=1040:h=810:color=#ffffff@0.18:t=3[base]"
-        if has_logo:
-            inputs += ["-i", str(logo_path)]
-            fc = f"{base_chain};[1:v]scale='min(420,iw)':'min(215,ih)':force_original_aspect_ratio=decrease[lg];[base][lg]overlay=(W-w)/2:205"
+            im = Image.new("RGB", (W, H), (11, 16, 24))
+        base = im.convert("RGBA")
+
+        # Card geometry matching the right-side Web screenshot
+        cw, ch, rx = 980, 680, 36
+        cx0, cy0 = (W - cw) // 2, (H - ch) // 2
+        cx1, cy1 = cx0 + cw, cy0 + ch
+
+        # Drop shadow with rounded corners
+        shadow = Image.new("RGBA", (W, H), (0, 0, 0, 0))
+        sd = ImageDraw.Draw(shadow)
+        sd.rounded_rectangle((cx0, cy0 + 18, cx1, cy1 + 18), radius=rx, fill=(0, 0, 0, 165))
+        shadow = shadow.filter(ImageFilter.GaussianBlur(24))
+        base = Image.alpha_composite(base, shadow)
+
+        # Frosted glass blur inside the rounded rectangle
+        crop_card = im.crop((cx0, cy0, cx1, cy1)).filter(ImageFilter.GaussianBlur(22))
+        crop_card = ImageEnhance.Brightness(crop_card).enhance(0.32).convert("RGBA")
+        tint = Image.new("RGBA", (cw, ch), (13, 19, 28, 210))
+        glass = Image.alpha_composite(crop_card, tint)
+        mask = Image.new("L", (cw, ch), 0)
+        ImageDraw.Draw(mask).rounded_rectangle((0, 0, cw - 1, ch - 1), radius=rx, fill=255)
+        base.paste(glass, (cx0, cy0), mask)
+
+        # Subtle glass border (1px rgba(255,255,255,0.16))
+        draw = ImageDraw.Draw(base)
+        draw.rounded_rectangle((cx0, cy0, cx1 - 1, cy1 - 1), radius=rx, outline=(255, 255, 255, 42), width=2)
+
+        # Logo centered in upper card
+        y_cursor = cy0 + 56
+        if logo and logo_path.exists():
+            try:
+                lg = Image.open(logo_path).convert("RGBA")
+                lg.thumbnail((340, 175), Image.LANCZOS)
+                lx = (W - lg.width) // 2
+                base.paste(lg, (lx, y_cursor), lg)
+                y_cursor += lg.height + 34
+            except Exception:
+                y_cursor += 90
         else:
-            fc = base_chain.replace("[base]", "")
-        r = subprocess.run(["ffmpeg", "-hide_banner", "-v", "error", "-y", *inputs,
-                            "-filter_complex", fc, "-frames:v", "1", str(bg)],
-                           capture_output=True, timeout=20)
-        if r.returncode == 0 and bg.exists():
-            return str(bg)
-    except Exception:
-        pass
-    if not bg.exists():
+            y_cursor += 80
+
+        # Company name (bold white) & subtitle (muted blue-gray)
+        f_title = _load_font(42, bold=True)
+        f_sub = _load_font(21, bold=False)
+        f_date = _load_font(20, bold=False)
+        comp = (s.get("company_name") or "").strip()
+        sub = (s.get("welcome_subtitle") or "").strip()
+        if comp:
+            draw.text((W // 2, y_cursor + 18), comp, font=f_title, fill=(255, 255, 255, 255), anchor="mm")
+            y_cursor += 64
+        if sub:
+            draw.text((W // 2, y_cursor + 8), sub, font=f_sub, fill=(184, 199, 217, 255), anchor="mm")
+            y_cursor += 44
+
+        # The mpv 78pt bold live clock sits centered around Y = 655 (--osd-margin-y=115 below center 540).
+        # Draw the Turkish Date cleanly right below the clock at Y = 748:
+        if s.get("welcome_show_clock", True):
+            TR_DAYS = ("Pazartesi", "Salı", "Çarşamba", "Perşembe", "Cuma", "Cumartesi", "Pazar")
+            TR_MONTHS = ("", "Ocak", "Şubat", "Mart", "Nisan", "Mayıs", "Haziran",
+                         "Temmuz", "Ağustos", "Eylül", "Ekim", "Kasım", "Aralık")
+            lt = time.localtime()
+            date_tr = f"{lt.tm_mday} {TR_MONTHS[lt.tm_mon]} {lt.tm_year} {TR_DAYS[lt.tm_wday]}"
+            draw.text((W // 2, 755), date_tr, font=f_date, fill=(159, 178, 200, 255), anchor="mm")
+
+        base.convert("RGB").save(bg, "PNG")
+        return str(bg)
+    except Exception as e:
+        log.warning("Pillow karşılama ekranı çizilemedi (%s), ffmpeg yedek kullanılıyor", e)
         try:
             subprocess.run(["ffmpeg", "-hide_banner", "-v", "error", "-y",
                             "-f", "lavfi", "-i", "color=c=#0d1117:s=1920x1080:d=1",
                             "-frames:v", "1", str(bg)], capture_output=True, timeout=10)
         except Exception:
             pass
-    return str(bg)
+        return str(bg)
 
 
 def notify(msg: str) -> None:
@@ -402,30 +470,9 @@ class Daemon:
     def _update_standby_osd(self, s: dict, status_note: str = "") -> None:
         if not self.ipc.sock:
             return
-        TR_DAYS = ("Pazartesi", "Salı", "Çarşamba", "Perşembe", "Cuma", "Cumartesi", "Pazar")
-        TR_MONTHS = ("", "Ocak", "Şubat", "Mart", "Nisan", "Mayıs", "Haziran",
-                     "Temmuz", "Ağustos", "Eylül", "Ekim", "Kasım", "Aralık")
-        lt = time.localtime()
-        date_tr = f"{lt.tm_mday} {TR_MONTHS[lt.tm_mon]} {lt.tm_year} {TR_DAYS[lt.tm_wday]}"
-        comp = (s.get("company_name") or "").strip()
-        sub = (s.get("welcome_subtitle") or "").strip()
-        # Use mpv ASS override tags (\an5\pos(960,...)\fs\b1\1c) so typography, sizes, colors and vertical positions
-        # match the Web CSS (.hero-title, .hero-sub, .hero-clock, .hero-date) pixel-for-pixel!
-        ass = ["${osd-ass-cc/0}{\\an8\\pos(960,455)\\bord0\\shad1.5\\4c&H000000&\\4a&H60&}"]
-        if comp:
-            ass.append(f"{{\\fs46\\b1\\fsp2\\1c&HFFFFFF&}}{comp}\\N")
-        if sub:
-            ass.append(f"{{\\fs23\\b0\\fsp0.4\\1c&HD9C7B8&}}{sub}\\N")
-        if s.get("welcome_show_clock", True):
-            clk = time.strftime("%H:%M:%S")
-            ass.append(f"{{\\fs22}}\\N{{\\fs82\\b1\\fsp3\\1c&HFFFFFF&\\3c&HFF9E3B&\\bord1.5\\blur4}}{clk}\\N")
-            ass.append(f"{{\\fs21\\b0\\fsp0\\bord0\\blur0\\1c&HC8B29F&}}{date_tr}")
-        now = time.monotonic()
-        if now < self.boot_welcome_until:
-            rem_w = max(1, int(round(self.boot_welcome_until - now)))
-            ass.append(f"\\N{{\\fs16}}\\N{{\\fs22\\b1\\1c&HFF9E3B&}}{rem_w} saniye sonra video başlayacaktır")
-        ass.append("${osd-ass-cc/1}")
-        txt = "".join(ass)
+        # Company name, subtitle and date are baked into the rounded glass card by Pillow (_ensure_standby_bg).
+        # Here mpv renders ONLY the large bold 78pt live HH:MM:SS clock in the center slot!
+        txt = time.strftime("%H:%M:%S") if s.get("welcome_show_clock", True) else ""
         if txt != self.last_clock_str:
             self.last_clock_str = txt
             self.ipc.set("osd-msg1", txt)

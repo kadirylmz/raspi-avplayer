@@ -39,7 +39,7 @@ esac
 log "Paketler kuruluyor (internet gerekir; çalışma sırasında gerekmez)"
 export DEBIAN_FRONTEND=noninteractive
 apt-get update
-apt-get install -y python3 python3-venv python3-pip ffmpeg mpv alsa-utils v4l-utils rsync || true
+apt-get install -y python3 python3-venv python3-pip python3-pil ffmpeg mpv alsa-utils v4l-utils rsync || true
 apt-get install -y libraspberrypi-bin 2>/dev/null || true   # vcgencmd (opsiyonel)
 
 # ---------------------------------------------------------------- uygulama
