@@ -174,14 +174,22 @@ class ActionIn(BaseModel):
 
 @router.post("/player/{action}")
 def player_action(action: str, body: ActionIn | None = None):
-    if action not in ("play", "stop", "restart", "restart_service", "reboot"):
+    valid_actions = ("play", "stop", "restart", "restart_service", "reboot", "shutdown", "display_off", "display_on")
+    if action not in valid_actions:
         raise HTTPException(404, "Bilinmeyen eylem")
-    if action == "reboot" and not (body and body.confirm):
-        raise HTTPException(400, "Cihaz reboot'u için onay gerekli")
-    names = {"restart": "PLAYER RESTART", "restart_service": "PLAYER SERVICE RESTART", "reboot": "DEVICE REBOOT"}
-    log.warning("Kullanıcı komutu: %s", names.get(action, action))
+    if action in ("reboot", "shutdown") and not (body and body.confirm):
+        raise HTTPException(400, f"Cihaz {action} işlemi için onay gerekli ({{\"confirm\": true}})")
+    names = {
+        "restart": "PLAYER RESTART",
+        "restart_service": "PLAYER SERVICE RESTART",
+        "reboot": "DEVICE REBOOT",
+        "shutdown": "DEVICE SHUTDOWN",
+        "display_off": "HDMI DISPLAY OFF",
+        "display_on": "HDMI DISPLAY ON",
+    }
+    log.warning("Otomasyon / Kullanıcı komutu: %s", names.get(action, action))
     db.add_command(action)
-    return {"ok": True}
+    return {"ok": True, "action": action}
 
 
 @router.get("/audio/outputs")

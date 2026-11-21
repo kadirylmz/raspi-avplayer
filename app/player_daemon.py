@@ -928,6 +928,23 @@ class Daemon:
         elif cmd == "reboot":  # DEVICE REBOOT
             self._set("rebooting", "Cihaz yeniden başlatılıyor")
             self._reboot_device()
+        elif cmd == "shutdown":  # DEVICE SHUTDOWN (SAFE POWEROFF)
+            self._set("shutdown", "Cihaz kapatılıyor")
+            self._write_state(db.all_settings())
+            if os.name == "nt":
+                self._exec(["shutdown", "/s", "/t", "0", "/f"], "WINDOWS CİHAZ SHUTDOWN")
+            else:
+                self._exec(["systemctl", "poweroff"], "CİHAZ POWEROFF")
+        elif cmd == "display_off":
+            if os.name == "nt":
+                self._exec(["powershell", "-Command", "(Add-Type -MemberDefinition '[DllImport(\"user32.dll\")] public static extern int SendMessage(int hWnd, int hMsg, int wParam, int lParam);' -Name 'Win32' -Namespace 'Win32' -PassThru)::SendMessage(0xFFFF, 0x0112, 0xF170, 2)"], "WINDOWS DISPLAY OFF")
+            else:
+                self._exec(["vcgencmd", "display_power", "0"], "HDMI DISPLAY OFF")
+        elif cmd == "display_on":
+            if os.name == "nt":
+                self._exec(["powershell", "-Command", "(Add-Type -MemberDefinition '[DllImport(\"user32.dll\")] public static extern void mouse_event(int flags, int dx, int dy, int cButtons, int info);' -Name 'Win32' -Namespace 'Win32' -PassThru)::mouse_event(1, 1, 1, 0, 0)"], "WINDOWS DISPLAY ON")
+            else:
+                self._exec(["vcgencmd", "display_power", "1"], "HDMI DISPLAY ON")
         elif cmd == "unblock":
             self.blocked = None
             self.fails = 0
