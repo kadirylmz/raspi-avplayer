@@ -23,17 +23,20 @@ from . import audio, config, db, hardware, logsetup, media, system
 from .mpv_ipc import MpvError, MpvIPC
 
 log = logging.getLogger("avp.player")
-HWDEC_PREF = ("drm", "drm-copy", "v4l2m2m", "v4l2m2m-copy", "v4l2request")
+# On Raspberry Pi 4 (bcm2835-codec H.264 / rpi-hevc-dec HEVC) and Pi 5 (rpi-hevc-dec):
+# - "drm" is ZERO-COPY DRM-PRIME (decoder DMA buffer goes straight to display/GPU, ~5-15% CPU)
+# - "v4l2m2m" is zero-copy V4L2 M2M (H.264 on Pi 4)
+# Avoid "*-copy" modes first because copying full 1080p/4K NV12 frames back to CPU RAM spikes CPU to 95%.
+HWDEC_PREF = ("drm", "v4l2m2m", "v4l2request", "drm-copy", "v4l2m2m-copy")
 
 
 # ----------------------------------------------------------------- pure helpers
 def choose_hwdec(help_text: str, setting: str) -> str:
     if setting == "no":
         return "no"
-    # Match both "  drm" and "  drm - description" formats across mpv versions
     avail = set(re.findall(r"^\s*([a-z0-9_\-]+)(?:\s|$)", help_text, re.M)) - {"Available"}
     pick = [h for h in HWDEC_PREF if h in avail]
-    return ",".join(pick + ["auto-copy"]) if pick else "drm,drm-copy,v4l2m2m,v4l2m2m-copy,auto-copy"
+    return ",".join(pick) if pick else "drm,v4l2m2m,drm-copy,v4l2m2m-copy,auto"
 
 
 def build_mpv_args(video: str, s: dict, audio_dev: Optional[str], hwdec: str,
@@ -47,11 +50,13 @@ def build_mpv_args(video: str, s: dict, audio_dev: Optional[str], hwdec: str,
         "--loop-file=" + ("inf" if s["loop"] else "no"),
         f"--hwdec={hwdec}", "--hwdec-codecs=all",
         "--vd-lavc-dr=yes", "--vd-lavc-threads=4",
+        "--vd-lavc-fast", "--vd-lavc-skiploopfilter=nonref",
         "--scale=bilinear", "--cscale=bilinear", "--dscale=bilinear",
         "--dither=no", "--correct-downscaling=no", "--linear-downscaling=no", "--sigmoid-upscaling=no",
-        "--deband=no",
-        f"--video-sync={s['video_sync']}", "--framedrop=decoder+vo", "--interpolation=no",
-        "--cache=yes", "--demuxer-max-bytes=96MiB", "--demuxer-readahead-secs=15",
+        "--deband=no", "--opengl-pbo=yes",
+        "--drm-draw-plane=overlay", "--drm-drmprime-video-plane=primary",
+        f"--video-sync={s['video_sync']}", "--framedrop=vo", "--interpolation=no",
+        "--cache=yes", "--demuxer-max-bytes=64MiB", "--demuxer-readahead-secs=10",
         "--audio-channels=stereo", "--audio-buffer=0.3", "--gapless-audio=no",
         f"--volume={int(s['volume'])}", f"--mute={'yes' if s['mute'] else 'no'}",
         "--volume-max=130", "--msg-level=all=warn",
@@ -60,7 +65,7 @@ def build_mpv_args(video: str, s: dict, audio_dev: Optional[str], hwdec: str,
     if vo_args is not None:
         args += vo_args
     else:
-        args += ["--vo=gpu,drm", "--gpu-context=drm"]
+        args += ["--vo=gpu,drm", "--gpu-context=drm", "--gpu-api=opengl"]
     if audio_dev:
         args.append(f"--audio-device={audio_dev}")
     return args

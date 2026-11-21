@@ -69,6 +69,13 @@ if [[ $ENABLE_4KP60 -eq 1 && $PI == pi4 && -f $BOOT/config.txt ]]; then
   log "Pi 4: 4Kp60 HDMI etkinleştiriliyor (daha fazla ısınır, iyi soğutma gerekir)"
   grep -q '^hdmi_enable_4kp60=1' "$BOOT/config.txt" || printf '\n[pi4]\nhdmi_enable_4kp60=1\n[all]\n' >>"$BOOT/config.txt"
 fi
+if [[ -f $BOOT/config.txt ]]; then
+  log "DRM/KMS CMA video belleği optimize ediliyor (cma-512)"
+  sed -i 's/^dtoverlay=vc4-kms-v3d$/dtoverlay=vc4-kms-v3d,cma-512/' "$BOOT/config.txt" || true
+fi
+for g in /sys/devices/system/cpu/cpu*/cpufreq/scaling_governor; do
+  [[ -w "$g" ]] && echo performance >"$g" || true
+done
 if [[ $KEEP_DESKTOP -eq 0 ]]; then
   log "Masaüstü kapatılıyor (konsol modu): mpv ekrana doğrudan DRM/KMS ile çizer"
   systemctl set-default multi-user.target

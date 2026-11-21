@@ -54,6 +54,10 @@ def summarize(raw: dict, size: Optional[int] = None) -> dict:
         vbr = int(frac(v.get("bit_rate")))
         if not vbr and total_br:
             vbr = max(total_br - (int(frac(a.get("bit_rate"))) if a else 0), 0)
+        rot = int(frac((v.get("tags") or {}).get("rotate", 0)))
+        for sd in v.get("side_data_list") or []:
+            if "rotation" in sd:
+                rot = int(frac(sd.get("rotation", 0)))
         out["video"] = {
             "codec": v.get("codec_name"),
             "profile": v.get("profile"),
@@ -69,7 +73,7 @@ def summarize(raw: dict, size: Optional[int] = None) -> dict:
             "color_transfer": v.get("color_transfer"),
             "field_order": v.get("field_order", "progressive"),
             "hdr": v.get("color_transfer") in ("smpte2084", "arib-std-b67"),
-            "rotation": int(frac((v.get("tags") or {}).get("rotate", 0))),
+            "rotation": rot,
         }
     if a:
         out["audio"] = {

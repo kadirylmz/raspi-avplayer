@@ -68,6 +68,8 @@ def video_ok(probe: dict, model: str) -> list[str]:
         why.append("HDR içerik (SDR'ye çevrilmeli)")
     if v.get("rotation"):
         why.append("Dönüş (rotate) metadata'sı var")
+    if model == "pi4" and v["codec"] == "h264" and v.get("bitrate", 0) > 22_000_000:
+        why.append(f"Bitrate çok yüksek ({v['bitrate'] // 1_000_000} Mbps > 22 Mbps Pi 4 sınırı)")
     if not _within(v, _cap(model, v["codec"])):
         c = _cap(model, v["codec"])
         why.append(f"{v['codec'].upper()} için Pi sınırı {c['w']}x{c['h']}@{c['fps']} aşılıyor")

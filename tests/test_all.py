@@ -121,7 +121,7 @@ def test_mpv_args():
 
 
 def test_choose_hwdec():
-    assert choose_hwdec("Available hwdecs:\n  auto\n  v4l2m2m-copy - V4L2\n  drm - DRM PRIME\n", "auto") == "drm,v4l2m2m-copy,auto-copy"
+    assert choose_hwdec("Available hwdecs:\n  auto\n  v4l2m2m-copy - V4L2\n  drm - DRM PRIME\n", "auto") == "drm,v4l2m2m-copy"
     assert "drm" in choose_hwdec("", "auto") and choose_hwdec("x", "no") == "no"
 
 
