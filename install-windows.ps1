@@ -17,6 +17,11 @@ param(
 $ErrorActionPreference = "Continue"
 $here = Split-Path -Parent $MyInvocation.MyCommand.Path
 
+# Varsa önceki durdurma bayrağını temizle
+if (Test-Path "$DataDir\stop.flag") {
+  Remove-Item "$DataDir\stop.flag" -Force -ErrorAction SilentlyContinue
+}
+
 function Run-SilentNative {
   param([scriptblock]$Script)
   $origEA = $global:ErrorActionPreference
@@ -107,7 +112,9 @@ $webRunner = "$DataDir\run-web.ps1"
 `$env:AVP_PORT = "$Port"
 Set-Location "$here"
 while (`$true) {
+  if (Test-Path "$DataDir\stop.flag") { break }
   & "$py" -c "try:`n import static_ffmpeg; static_ffmpeg.add_paths()`nexcept Exception: pass`nimport uvicorn; uvicorn.run('app.main:app', host='0.0.0.0', port=$Port, access_log=False)"
+  if (Test-Path "$DataDir\stop.flag") { break }
   Start-Sleep -Seconds 2
 }
 "@ | Set-Content -Path $webRunner -Encoding UTF8
@@ -119,7 +126,9 @@ $playerRunner = "$DataDir\run-player.ps1"
 `$env:AVP_RUN  = "$DataDir\run"
 Set-Location "$here"
 while (`$true) {
+  if (Test-Path "$DataDir\stop.flag") { break }
   & "$py" -c "try:`n import static_ffmpeg; static_ffmpeg.add_paths()`nexcept Exception: pass`nfrom app.player_daemon import main; main()"
+  if (Test-Path "$DataDir\stop.flag") { break }
   Start-Sleep -Seconds 2
 }
 "@ | Set-Content -Path $playerRunner -Encoding UTF8
