@@ -324,8 +324,8 @@ async function settings() {
     <div class="row"><span>Süre:</span><select id="r_delay" onchange="$('#r_cust').style.display=this.value==='c'?'':'none'">
       ${delays.map(d => `<option value="${d}" ${s.reset_delay === d ? "selected" : ""}>${d} saniye</option>`).join("")}<option value="c" ${isCustom ? "selected" : ""}>Özel süre</option></select>
       <input id="r_cust" type="number" min="5" value="${s.reset_delay}" style="width:100px;${isCustom ? "" : "display:none"}"> <span class="mut sm">sn</span>
-      <span style="margin-left:14px">Tekrar:</span><select id="r_rep"><option value="once" ${s.reset_repeat === "once" ? "selected" : ""}>Tek seferlik</option><option value="periodic" ${s.reset_repeat === "periodic" ? "selected" : ""}>Periyodik (her video başlangıcından sonra)</option></select></div>
-    <p class="sm mut">Tek seferlik: tetiklenince kendini devre dışı bırakır (reboot döngüsünü önler). Süre, ilk kare görüntülendiğinde başlar.</p>
+      <span style="margin-left:14px">Tekrar:</span><select id="r_rep"><option value="once" ${s.reset_repeat === "once" ? "selected" : ""}>Her açılışta 1 kez (fiş takıldığında / elektrik gelince 1 kez çalışır)</option><option value="periodic" ${s.reset_repeat === "periodic" ? "selected" : ""}>Periyodik (sürekli her X saniyede bir tekrarlar)</option></select></div>
+    <p class="sm mut">Her açılışta 1 kez: Ayar kalıcı olarak açık kalır; elektrik her kesilip geldiğinde (veya cihaz her açıldığında) video başladıktan 60 sn sonra 1 kez yeniden başlatır ve bir sonraki elektrik kesintisine kadar kesintisiz oynatır.</p>
     <div class="row"><button class="pri" onclick="saveReset()">Kaydet</button>
     <button onclick="pl('restart')">Şimdi: Player Restart</button><button onclick="pl('restart_service')">Şimdi: Servis Restart</button>
     <button class="dng" onclick="rebootNow()">Şimdi: Cihazı Reboot Et</button></div></div>

@@ -113,6 +113,7 @@ class Daemon:
         self.last_err_log = 0.0
         self.ended_video: tuple = ()
         self.tail: deque = deque(maxlen=12)   # last mpv output lines (for crash diagnostics)
+        self.boot_reset_done = False          # tracks "once per boot" reset execution
 
     # ---- lifecycle
     def run(self) -> None:
@@ -381,13 +382,42 @@ class Daemon:
     def _reset_tick(self, s: dict, now: float) -> None:
         if not s["reset_enabled"] or self.play_started is None:
             return
+        # "once" = runs ONCE every time the Raspberry Pi is powered on (fiş takıldığında / her açılışta 1 kez).
+        # It NEVER sets reset_enabled=False in the database, so the setting remains permanently active across power cycles!
+        # To prevent an infinite reboot loop when mode=="device_reboot" (since systemctl reboot is a warm reboot, not a power cut),
+        # we write a transient marker before warm reboot and clear it after skipping that single post-reboot cycle.
+        boot_flag = config.RUN_DIR / "boot_reset_done"
+        warm_reboot_flag = config.DATA_DIR / ".warm_reboot_done"
+        if s["reset_repeat"] == "once":
+            if self.boot_reset_done or boot_flag.exists():
+                return
+            if s["reset_mode"] == "device_reboot" and warm_reboot_flag.exists():
+                # We just came back from our own 60s device_reboot! Mark this boot done and remove the warm flag
+                # so the NEXT time power is unplugged and plugged back in, it WILL reboot after 60s again!
+                warm_reboot_flag.unlink(missing_ok=True)
+                self.boot_reset_done = True
+                try:
+                    boot_flag.write_text(str(time.time()))
+                except OSError:
+                    pass
+                log.info("60sn Cihaz Reboot sonrası açılış tamamlandı (bir sonraki fiş çek-tak açılışında tekrar çalışacak)")
+                return
         delay = max(int(s["reset_delay"]), 5)
         if now - self.play_started < delay:
             return
         mode = s["reset_mode"]
         log.warning("ZAMANLI RESET tetiklendi: mod=%s, gecikme=%ss, tekrar=%s", mode, delay, s["reset_repeat"])
         if s["reset_repeat"] == "once":
-            db.put("reset_enabled", False)  # disarm BEFORE acting (a reboot would otherwise loop)
+            self.boot_reset_done = True
+            try:
+                boot_flag.write_text(str(time.time()))
+            except OSError:
+                pass
+            if mode == "device_reboot":
+                try:
+                    warm_reboot_flag.write_text(str(time.time()))
+                except OSError:
+                    pass
         self.play_started = None  # periodic: timer restarts with the next playback start
         if mode == "player_restart":
             self._stop_mpv(); self.next_try = 0; self._set("starting", "Zamanlı oynatıcı yeniden başlatma")
@@ -434,9 +464,14 @@ class Daemon:
             self.next_try = 0
             if self.state == "error":
                 self._set("starting")
+        elif cmd == "rearm_reset":
+            self.boot_reset_done = False
+            if self.play_started is not None:
+                self.play_started = time.monotonic()
 
     def _write_state(self, s: dict) -> None:
         now = time.monotonic()
+        done_this_boot = s["reset_repeat"] == "once" and (self.boot_reset_done or (config.RUN_DIR / "boot_reset_done").exists())
         st = {
             "ts": time.time(), "pid": os.getpid(), "state": self.state, "message": self.message,
             "want_play": self.want_play, "video_id": self.running_video or s["active_video_id"],
@@ -445,9 +480,9 @@ class Daemon:
             "last_error": self.last_error, "hwdec_forced_off": self.hwdec_override == "no",
             "audio_device": self.applied.get("audio"), "stats": self.stats,
             "reset": {"enabled": s["reset_enabled"], "mode": s["reset_mode"], "delay": s["reset_delay"],
-                      "repeat": s["reset_repeat"],
+                      "repeat": s["reset_repeat"], "done_this_boot": done_this_boot,
                       "remaining": max(0, round(s["reset_delay"] - (now - self.play_started)))
-                      if (s["reset_enabled"] and self.play_started) else None},
+                      if (s["reset_enabled"] and self.play_started and not done_this_boot) else None},
         }
         try:
             config.RUN_DIR.mkdir(parents=True, exist_ok=True)

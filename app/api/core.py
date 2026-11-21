@@ -115,6 +115,10 @@ def put_settings(body: SettingsIn):
         elif k == "device_name":
             x = str(x).strip()[:40] or "AV-Player"
         db.put(k, x)
+    if any(k.startswith("reset_") for k in v):
+        (config.RUN_DIR / "boot_reset_done").unlink(missing_ok=True)
+        (config.DATA_DIR / ".warm_reboot_done").unlink(missing_ok=True)
+        db.add_command("rearm_reset")
     log.info("Ayarlar güncellendi: %s", {k: x for k, x in v.items() if k != "api_key"})
     return {"ok": True}
 
