@@ -41,8 +41,11 @@ def parse_aplay(text: str, model: str, usb_cards: set[str] | None = None) -> lis
             label += f" {cname.replace('vc4-hdmi-', 'HDMI ')}" if "vc4" in cname else f" ({cname})"
         elif kind == "usb":
             label += f" – {cname}"
+        # On Raspberry Pi vc4hdmi0/vc4hdmi1, ALSA "plughw:" fails unless IEC958 framing is injected
+        # via "hdmi:CARD=..." (or sysdefault:CARD=...). Using sysdefault / hdmi avoids "[ao] Failed to initialize audio driver 'alsa'".
+        mpv_dev = f"alsa/hdmi:CARD={cid},DEV={dev}" if kind == "hdmi" else f"alsa/plughw:CARD={cid},DEV={dev}"
         outs.append({"id": oid, "kind": kind, "label": label, "card": cid, "device": int(dev),
-                     "mpv_device": f"alsa/plughw:CARD={cid},DEV={dev}"})
+                     "mpv_device": mpv_dev, "fallback_device": f"alsa/sysdefault:CARD={cid}"})
     return outs
 
 

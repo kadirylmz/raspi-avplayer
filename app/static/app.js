@@ -172,7 +172,7 @@ function renderJobs(js) {
   $("#jobs").innerHTML = js.length ? `<div class="row sp" style="margin-top:20px"><h3 style="margin:0">Dönüştürme geçmişi</h3><button class="dng" onclick="clearJobs()">Geçmişi Temizle</button></div><div class="card" style="margin-top:8px"><table><tr><th>#</th><th>Video</th><th>Profil</th><th>Durum</th><th>Mesaj</th></tr>
   ${js.slice(0, 12).map(j => `<tr><td>${j.id}</td><td>${esc(j.name || "-")}</td><td>${esc(j.profile)}</td><td>${j.state}${j.state === "running" ? " %" + j.progress : ""}${["queued", "running"].includes(j.state) ? ` <button onclick="cancelJob(${j.id})">İptal</button>` : ""}</td><td class="sm">${esc(j.message || "")}</td></tr>`).join("")}</table></div>` : "";
 }
-const clearJobs = () => confirm("Tamamlanmış/iptal edilmiş tüm dönüştürme geçmişi silinsin mi?") && act(() => api("/api/jobs", { method: "DELETE" }), "Dönüştürme geçmişi temizlendi");
+const clearJobs = () => confirm("Tamamlanmış/iptal edilmiş tüm dönüştürme geçmişi silinsin mi?") && act(() => api("/api/jobs/clear", { method: "POST" }), "Dönüştürme geçmişi temizlendi");
 const activate = (id, force) => act(async () => {
   try { await api(`/api/videos/${id}/activate`, { method: "POST", json: { force: !!force } }); toast("Aktif video ayarlandı", "ok"); }
   catch (e) { if (/dönüştürül/.test(e.message) && confirm(e.message + "\n\nYine de dönüştürmeden oynatılsın mı? (akıcılık garanti değil)")) return activate(id, true); throw e; }
@@ -382,7 +382,7 @@ function logs() {
       $("#ll").innerHTML = r.map(l => `<div class="logline lv-${l.level}">${new Date(l.ts * 1000).toLocaleString("tr-TR")} <b>${l.level}</b> [${esc(l.source)}] ${esc(l.msg)}</div>`).join("") || "<span class='mut'>Kayıt yok</span>";
     } catch (e) { $("#ll").textContent = e.message; }
   };
-  $("#clrlogs").onclick = () => confirm("Tüm sistem logları ve hata kayıtları silinsin mi?") && act(() => api("/api/logs", { method: "DELETE" }), "Tüm loglar temizlendi").then(load);
+  $("#clrlogs").onclick = () => confirm("Tüm sistem logları ve hata kayıtları silinsin mi?") && act(() => api("/api/logs/clear", { method: "POST" }), "Tüm loglar temizlendi").then(load);
   $("#lv").onchange = $("#ls").onchange = load; poll(load, 4000);
 }
 

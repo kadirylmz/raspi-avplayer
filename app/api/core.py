@@ -174,6 +174,7 @@ def logs(level: str = "", source: str = "", limit: int = 300):
 
 
 @router.delete("/logs")
+@router.post("/logs/clear")
 def clear_logs():
     db.x("DELETE FROM logs")
     for f in config.LOG_DIR.glob("*.log*"):
