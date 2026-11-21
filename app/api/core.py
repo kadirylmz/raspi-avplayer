@@ -21,7 +21,7 @@ BOOLS = {"autoplay", "boot_autoplay", "loop", "mute", "prefer_hw_encode", "reset
 def player_state() -> dict:
     try:
         st = json.loads(config.STATE_FILE.read_text())
-        if time.time() - st.get("ts", 0) > 6:
+        if time.time() - st.get("ts", 0) > 15:
             st["state"], st["message"] = "service_down", "Player servisi yanıt vermiyor"
         return st
     except Exception:

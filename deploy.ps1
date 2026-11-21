@@ -20,18 +20,25 @@ foreach ($c in "ssh", "scp") {
   if (-not (Get-Command $c -ErrorAction SilentlyContinue)) { throw "$c bulunamadı. Ayarlar > Uygulamalar > Ek Özellikler > 'OpenSSH İstemcisi' kurun." }
 }
 
-Write-Host "`n[1/3] Dosyalar $target adresine kopyalanıyor (Pi şifresi sorulacak)..." -ForegroundColor Cyan
-ssh $target "rm -rf ~/avplayer && mkdir -p ~/avplayer"
-foreach ($item in "app", "systemd", "scripts", "install.sh", "uninstall.sh", "requirements.txt", "README.md") {
-  scp -r "$here\$item" "${target}:~/avplayer/"
-}
+Write-Host "`n[1/3] Dosyalar $target adresine paketlenip tek seferde kopyalanıyor..." -ForegroundColor Cyan
+$tarFile = Join-Path $env:TEMP "avplayer_deploy.tar.gz"
+if (Test-Path $tarFile) { Remove-Item $tarFile -Force }
+Push-Location $here
+tar -czf $tarFile app systemd scripts install.sh uninstall.sh requirements.txt README.md
+Pop-Location
+scp $tarFile "${target}:~/avplayer_deploy.tar.gz"
+Remove-Item $tarFile -Force
 
 $flags = ""
 if ($StaticIP)    { $flags += " --static-ip auto" }
 if ($Enable4kp60) { $flags += " --enable-4kp60" }
 
-Write-Host "`n[2/3] Pi üzerinde kurulum başlıyor (birkaç dakika sürer, sudo şifresi sorulabilir)..." -ForegroundColor Cyan
-$remote = "cd ~/avplayer && sed -i 's/\r$//' install.sh uninstall.sh scripts/*.sh && chmod +x install.sh uninstall.sh scripts/*.sh && sudo ./install.sh$flags"
+Write-Host "`n[2/3] Pi üzerinde kurulum/güncelleme uygulanıyor..." -ForegroundColor Cyan
+if ($Update) {
+  $remote = "rm -rf ~/avplayer && mkdir -p ~/avplayer && tar -xzf ~/avplayer_deploy.tar.gz -C ~/avplayer && rm -f ~/avplayer_deploy.tar.gz && cd ~/avplayer && sed -i 's/\r$//' install.sh uninstall.sh scripts/*.sh && sudo rsync -a --delete --exclude venv --exclude __pycache__ ~/avplayer/app /opt/avplayer/ && sudo install -m 644 ~/avplayer/systemd/*.service /etc/systemd/system/ && sudo systemctl daemon-reload && sudo systemctl restart avplayer-web.service avplayer-player.service && sleep 2 && sudo systemctl status avplayer-player.service --no-pager -l | head -n 20"
+} else {
+  $remote = "rm -rf ~/avplayer && mkdir -p ~/avplayer && tar -xzf ~/avplayer_deploy.tar.gz -C ~/avplayer && rm -f ~/avplayer_deploy.tar.gz && cd ~/avplayer && sed -i 's/\r$//' install.sh uninstall.sh scripts/*.sh && chmod +x install.sh uninstall.sh scripts/*.sh && sudo ./install.sh$flags"
+}
 ssh -t $target $remote
 
 Write-Host "`n[3/3] Bitti. Panel: http://$PiIP" -ForegroundColor Green

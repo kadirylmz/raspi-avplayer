@@ -188,7 +188,11 @@ class Daemon:
             return
         key = (path, Path(path).stat().st_mtime)
         if key not in self.checked:  # never autoplay a damaged file
+            self._set("starting", "Video doğrulanıyor")
+            self._write_state(s)
+            notify("WATCHDOG=1")
             ok, msg = media.quick_check(path)
+            notify("WATCHDOG=1")
             self.checked = {key: (ok, msg)}
             if not ok:
                 db.x("UPDATE videos SET status='corrupt', error=? WHERE id=?", (msg, vid))
@@ -208,6 +212,7 @@ class Daemon:
         except OSError:
             pass
         log.info("mpv başlatılıyor: video=#%s %s | hwdec=%s | ses=%s", vid, v["name"], hwdec, out["label"] if out else "varsayılan")
+        self.tail.clear()
         try:
             self.proc = subprocess.Popen(args, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, errors="replace")
         except Exception as e:
@@ -218,14 +223,27 @@ class Daemon:
         self.play_started = None
         self.running_video, self.running_sig = vid, sig
         self.decoder_errors = 0
-        self.tail.clear()
         self.last_pos = (None, time.monotonic())
         self.applied = {"volume": s["volume"], "mute": s["mute"], "loop": s["loop"], "audio": out["id"] if out else None, "video_sync": s["video_sync"], "hwdec_s": s["hwdec"]}
         self.restarts += 1
         self._set("starting", "Video açılıyor")
-        if not self.ipc.connect(10):
+        self._write_state(s)
+        # Wait up to 8s for IPC socket, but abort immediately if mpv exits early
+        deadline = time.monotonic() + 8.0
+        connected = False
+        while time.monotonic() < deadline:
+            notify("WATCHDOG=1")
+            if self.proc.poll() is not None:
+                break
+            if self.ipc.connect(0.4):
+                connected = True
+                break
+        if not connected:
+            rc = self.proc.poll()
+            time.sleep(0.2)
+            log.error("mpv çıktısı (son satırlar): %s", " | ".join(self.tail) or "<boş>")
             self._stop_mpv()
-            self._failure("mpv IPC bağlantısı kurulamadı")
+            self._failure(f"mpv çöktü (çıkış kodu {rc})" if rc is not None else "mpv IPC bağlantısı kurulamadı")
 
     def _stop_mpv(self) -> None:
         self.ipc.close()
