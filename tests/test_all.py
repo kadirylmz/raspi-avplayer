@@ -42,10 +42,12 @@ def test_pi4_4k_h264_goes_hevc_and_keeps_resolution():
     assert p["vcodec"] == "hevc" and (p["width"], p["height"]) == (3840, 2160) and p["action"] == "transcode"
 
 
-def test_pi5_4k30_keeps_h264_pi5_4k60_uses_hevc():
+def test_pi5_4k_and_1200p_profiles():
     a = profiles.make_plan(probe(codec="prores", w=3840, h=2160, fps=30), "pi5", "auto")
     b = profiles.make_plan(probe(codec="prores", w=3840, h=2160, fps=60), "pi5", "auto")
-    assert a["vcodec"] == "h264" and b["vcodec"] == "hevc"
+    w4 = profiles.make_plan(probe(codec="h264", w=1920, h=1200, fps=30), "pi4", "1200p")
+    assert a["vcodec"] == "hevc" and b["vcodec"] == "hevc"
+    assert w4["vcodec"] == "hevc" and (w4["width"], w4["height"]) == (1920, 1200)
 
 
 def test_pi4_hevc_4k_source_copied():

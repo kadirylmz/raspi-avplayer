@@ -8,12 +8,19 @@ Hardware facts used:
 """
 from typing import Optional
 
-PROFILES = ("auto", "keep", "1080p", "4k", "custom")
+PROFILES = ("auto", "keep", "1080p", "1200p", "4k", "custom")
 
 HW = {
+    # Pi 4 VideoCore VI:
+    # - H.264 hardware decoder (bcm2835-codec) has a HARD silicon limit of 1920x1088 (Level 4.2).
+    #   Anything above 1080p (including 1920x1200 WUXGA and 3840x2160 4K) CANNOT be decoded in H.264 hardware!
+    # - HEVC (H.265) hardware decoder (rpi-hevc-dec) decodes up to 3840x2160 @ 60fps in hardware (including 1920x1200).
     "pi4": {"h264": dict(w=1920, h=1080, fps=60, hw=True), "hevc": dict(w=3840, h=2160, fps=60, hw=True)},
+    # Pi 5:
+    # - HEVC (H.265) hardware decoder up to 4Kp60 (~10% CPU).
+    # - H.264 has NO hardware decoder (CPU decode: fine up to 1920x1200@60 or 4K@30, heavy at 4K@60).
     "pi5": {"h264": dict(w=3840, h=2160, fps=30, hw=False), "hevc": dict(w=3840, h=2160, fps=60, hw=True)},
-    "other": {"h264": dict(w=1920, h=1080, fps=30, hw=False), "hevc": dict(w=1920, h=1080, fps=30, hw=False)},
+    "other": {"h264": dict(w=1920, h=1200, fps=30, hw=False), "hevc": dict(w=1920, h=1200, fps=30, hw=False)},
 }
 STD_FPS = [(24000, 1001), (24, 1), (25, 1), (30000, 1001), (30, 1), (50, 1), (60000, 1001), (60, 1)]
 OK_AUDIO = ("aac", "mp3")
@@ -116,8 +123,12 @@ def make_plan(probe: dict, model: str, profile: str = "auto", display: Optional[
         codec = custom.get("codec", "h264")
     elif profile == "1080p":
         codec = "h264"
+    elif profile == "1200p":
+        # 1920x1200 (WUXGA) exceeds Pi 4 H.264 hardware decoder limit (1088px height),
+        # so Pi 4 MUST use HEVC hardware decoder to keep full 1920x1200 resolution!
+        codec = "hevc" if model == "pi4" else "h264"
     elif profile in ("4k", "auto", "keep") and (big or profile == "4k"):
-        codec = {"pi4": "hevc", "pi5": "hevc" if fps_pre > 31 else "h264"}.get(model, "h264")
+        codec = {"pi4": "hevc", "pi5": "hevc"}.get(model, "h264")
     else:
         codec = "h264"
     if profile in ("auto", "keep") and v["codec"] == "hevc" and not video_ok(probe, model) and codec == "h264":
@@ -126,13 +137,15 @@ def make_plan(probe: dict, model: str, profile: str = "auto", display: Optional[
 
     # ---- target size / fps
     mw, mh = cap["w"], cap["h"]
-    if profile in ("auto", "keep", "1080p") and display and display.get("connected") and display.get("max_w"):
-        if profile != "keep":
+    if profile in ("auto", "keep", "1080p", "1200p") and display and display.get("connected") and display.get("max_w"):
+        if profile not in ("keep", "1200p"):
             mw, mh = min(mw, display["max_w"]), min(mh, display["max_h"])
-        elif display["max_w"] < v["width"]:
+        elif display["max_w"] < v["width"] or display["max_h"] < v["height"]:
             warnings.append(f"Bağlı ekran en fazla {display['max_w']}x{display['max_h']} gösteriyor")
     if profile == "1080p":
         mw, mh = min(mw, 1920), min(mh, 1080)
+    elif profile == "1200p":
+        mw, mh = min(mw, 1920), min(mh, 1200)
     elif profile == "4k":
         mw, mh = min(mw, 3840), min(mh, 2160)
         if display and display.get("connected") and display["max_w"] and display["max_w"] < 3840:

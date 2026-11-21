@@ -219,11 +219,12 @@ async function upload(files, replaceId) {
 
 // conversion dialog
 let convState = { id: 0, profile: "auto" };
-const PROFS = [["auto", "1. Otomatik optimizasyon", "Pi modeline, ekrana ve kaynağa göre en iyi format (gerekmiyorsa hiç dönüştürmez)"],
-["keep", "2. Orijinal kaliteyi koru", "Mümkünse kopyala/remux; gerekirse çok yüksek kalitede kodla, çözünürlüğü sadece donanım sınırı aşılırsa düşür"],
-["1080p", "3. 1080p optimize et", "Gerekirse 1920x1080'e indirir (büyütme yok), H.264"],
-["4k", "4. 4K optimize et", "3840x2160'a kadar korur (Pi 4 → HEVC, Pi 5 → 30 fps ve altı H.264, üstü HEVC)"],
-["custom", "5. Özel profil", "Kodek, maksimum çözünürlük/FPS, CRF/bitrate kendiniz seçin"]];
+const PROFS = [["auto", "1. Otomatik optimizasyon", "Pi modeline, ekrana ve kaynağa göre en iyi format (1920x1200 ve 4K için HEVC donanım decode)"],
+["keep", "2. Orijinal kaliteyi koru", "Mümkünse kopyala/remux; çözünürlüğü korur (1080p üstünü Pi 4/5 HEVC donanım çözücüsüne hazırlar)"],
+["1080p", "3. 1080p (1920x1080) optimize et", "16:9 ekranlar için 1920x1080 H.264 (Pi 4 & Pi 5 tam uyumlu)"],
+["1200p", "4. WUXGA (1920x1200) optimize et", "16:10 projeksiyon/monitörler için 1920x1200 (Pi 4'te HEVC donanım decode, Pi 5'te H.264/HEVC)"],
+["4k", "5. 4K (3840x2160) optimize et", "3840x2160 HEVC (H.265) — Pi 4 ve Pi 5 4K donanım decoder çipiyle %10-15 CPU ile oynatır"],
+["custom", "6. Özel profil", "Kodek, maksimum çözünürlük/FPS, CRF/bitrate kendiniz seçin"]];
 function convDlg(id) { convState = { id, profile: "auto" }; drawConv(); }
 async function drawConv() {
   const { id, profile } = convState;
