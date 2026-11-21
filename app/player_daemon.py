@@ -75,8 +75,8 @@ def build_standby_args(bg_path: str, sock: str, vo_args: Optional[list[str]] = N
         "--fs", "--no-input-terminal", "--idle=yes", "--force-window=yes",
         "--image-display-duration=inf", "--loop-file=inf",
         "--osd-level=1", "--no-osc", "--no-input-default-bindings", "--input-vo-keyboard=no",
-        "--osd-font-size=44", "--osd-align-x=center", "--osd-align-y=center", "--osd-margin-y=55",
-        "--osd-color=#FFFFFFFF", "--osd-back-color=#00000000", "--osd-border-size=2", "--osd-shadow-offset=2",
+        "--osd-font-size=40", "--osd-align-x=center", "--osd-align-y=center",
+        "--osd-color=#FFFFFFFF", "--osd-back-color=#00000000", "--osd-border-size=0", "--osd-shadow-offset=0",
         "--cursor-autohide=always", "--no-border", "--msg-level=all=warn",
         f"--input-ipc-server={sock}",
     ]
@@ -84,10 +84,24 @@ def build_standby_args(bg_path: str, sock: str, vo_args: Optional[list[str]] = N
     return args
 
 
+def _make_rounded_card_Filter() -> str:
+    """FFmpeg filter chain that blurs & darkens the center card area (x=440, y=135, w=1040, h=810)
+    with a soft border and drop shadow, matching the Web CSS .hero-glass (backdrop-filter: blur(16px))."""
+    return (
+        "split=2[bg][fg];"
+        "[fg]crop=1040:810:440:135,boxblur=20:2,colorlevels=romax=0.32:gomax=0.36:bomax=0.44,"
+        "drawbox=x=0:y=0:w=1040:h=810:color=#0c121b@0.78:t=fill,"
+        "drawbox=x=0:y=0:w=1040:h=810:color=#ffffff@0.18:t=3[card];"
+        "[bg]drawbox=x=452:y=150:w=1040:h=810:color=#000000@0.48:t=fill[bgs];"
+        "[bgs][card]overlay=440:135"
+    )
+
+
 def _ensure_standby_bg(s: dict) -> str:
-    """Create or pick the 1920x1080 standby background image:
-    - Uses uploaded custom background (bg_file) if present (scaled & cropped to 1920x1080 with a centered glass card)
-    - Overlays uploaded brand logo (logo_file) centered in the upper card area matching the web layout 1:1
+    """Create the 1920x1080 standby background image matching the Web .hero-wrap + .hero-glass 1:1:
+    - Full-screen background image (or radial dark slate)
+    - Real frosted glass (boxblur=20) inside the centered card (x=440, y=135, w=1040, h=810) with drop shadow
+    - Uploaded brand logo centered at the top of the card
     """
     logo = s.get("logo_file") or ""
     logo_path = config.DATA_DIR / logo
@@ -97,17 +111,18 @@ def _ensure_standby_bg(s: dict) -> str:
     config.RUN_DIR.mkdir(parents=True, exist_ok=True)
     has_bg = bool(bg_name and bg_src.exists() and bg_src.suffix.lower() in (".png", ".jpg", ".jpeg", ".webp"))
     has_logo = bool(logo and logo_path.exists() and logo_path.suffix.lower() in (".png", ".jpg", ".jpeg", ".webp"))
+    glass = _make_rounded_card_Filter()
     try:
         inputs = []
         if has_bg:
             inputs += ["-i", str(bg_src)]
-            base_chain = "[0:v]scale=1920:1080:force_original_aspect_ratio=increase,crop=1920:1080,eq=brightness=-0.15:saturation=0.95,drawbox=x=420:y=150:w=1080:h=780:color=#0d131c@0.75:t=fill,drawbox=x=420:y=150:w=1080:h=780:color=#ffffff@0.15:t=2[base]"
+            base_chain = f"[0:v]scale=1920:1080:force_original_aspect_ratio=increase,crop=1920:1080,eq=brightness=-0.10:saturation=0.95,{glass}[base]"
         else:
             inputs += ["-f", "lavfi", "-i", "color=c=#0b1018:s=1920x1080:d=1"]
-            base_chain = "[0:v]drawbox=x=420:y=150:w=1080:h=780:color=#131b26@0.92:t=fill,drawbox=x=420:y=150:w=1080:h=780:color=#2a3a4e@0.8:t=2[base]"
+            base_chain = "[0:v]drawbox=x=440:y=135:w=1040:h=810:color=#111926@0.94:t=fill,drawbox=x=440:y=135:w=1040:h=810:color=#ffffff@0.18:t=3[base]"
         if has_logo:
             inputs += ["-i", str(logo_path)]
-            fc = f"{base_chain};[1:v]scale='min(380,iw)':'min(170,ih)':force_original_aspect_ratio=decrease[lg];[base][lg]overlay=(W-w)/2:210"
+            fc = f"{base_chain};[1:v]scale='min(420,iw)':'min(215,ih)':force_original_aspect_ratio=decrease[lg];[base][lg]overlay=(W-w)/2:205"
         else:
             fc = base_chain.replace("[base]", "")
         r = subprocess.run(["ffmpeg", "-hide_banner", "-v", "error", "-y", *inputs,
@@ -388,23 +403,25 @@ class Daemon:
                      "Temmuz", "Ağustos", "Eylül", "Ekim", "Kasım", "Aralık")
         lt = time.localtime()
         date_tr = f"{lt.tm_mday} {TR_MONTHS[lt.tm_mon]} {lt.tm_year} {TR_DAYS[lt.tm_wday]}"
-        lines = []
         comp = (s.get("company_name") or "").strip()
         sub = (s.get("welcome_subtitle") or "").strip()
+        # Use mpv ASS override tags (\an5\pos(960,...)\fs\b1\1c) so typography, sizes, colors and vertical positions
+        # match the Web CSS (.hero-title, .hero-sub, .hero-clock, .hero-date) pixel-for-pixel!
+        ass = ["${osd-ass-cc/0}{\\an8\\pos(960,455)\\bord0\\shad1.5\\4c&H000000&\\4a&H60&}"]
         if comp:
-            lines.append(comp)
+            ass.append(f"{{\\fs46\\b1\\fsp2\\1c&HFFFFFF&}}{comp}\\N")
         if sub:
-            lines.append(sub)
-        lines.append("")
+            ass.append(f"{{\\fs23\\b0\\fsp0.4\\1c&HD9C7B8&}}{sub}\\N")
         if s.get("welcome_show_clock", True):
-            lines.append(time.strftime("%H:%M:%S"))
-            lines.append(date_tr)
+            clk = time.strftime("%H:%M:%S")
+            ass.append(f"{{\\fs22}}\\N{{\\fs82\\b1\\fsp3\\1c&HFFFFFF&\\3c&HFF9E3B&\\bord1.5\\blur4}}{clk}\\N")
+            ass.append(f"{{\\fs21\\b0\\fsp0\\bord0\\blur0\\1c&HC8B29F&}}{date_tr}")
         now = time.monotonic()
         if now < self.boot_welcome_until:
             rem_w = max(1, int(round(self.boot_welcome_until - now)))
-            lines.append("")
-            lines.append(f"{rem_w} saniye sonra video başlayacaktır")
-        txt = "\n".join(lines)
+            ass.append(f"\\N{{\\fs16}}\\N{{\\fs22\\b1\\1c&HFF9E3B&}}{rem_w} saniye sonra video başlayacaktır")
+        ass.append("${osd-ass-cc/1}")
+        txt = "".join(ass)
         if txt != self.last_clock_str:
             self.last_clock_str = txt
             self.ipc.set("osd-msg1", txt)
