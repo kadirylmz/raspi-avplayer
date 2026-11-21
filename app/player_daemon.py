@@ -399,6 +399,9 @@ class Daemon:
     # ---- 60s reset scheduler
     def _reset_tick(self, s: dict, now: float) -> None:
         if not s["reset_enabled"] or self.play_started is None:
+            if self.last_osd_rem is not None and self.ipc.sock:
+                self.last_osd_rem = None
+                self.ipc.set("osd-msg1", "")
             return
         # "once" = runs ONCE every time the Raspberry Pi is powered on (fiş takıldığında / her açılışta 1 kez).
         # It NEVER sets reset_enabled=False in the database, so the setting remains permanently active across power cycles!
@@ -408,6 +411,9 @@ class Daemon:
         warm_reboot_flag = config.DATA_DIR / ".warm_reboot_done"
         if s["reset_repeat"] == "once":
             if self.boot_reset_done or boot_flag.exists():
+                if self.last_osd_rem is not None and self.ipc.sock:
+                    self.last_osd_rem = None
+                    self.ipc.set("osd-msg1", "")
                 return
             if s["reset_mode"] == "device_reboot" and warm_reboot_flag.exists():
                 # We just came back from our own 60s device_reboot! Mark this boot done and remove the warm flag
@@ -446,28 +452,20 @@ class Daemon:
             return out
 
         if elapsed < delay:
-            # Show Turkish OSD message directly on Raspberry Pi HDMI screen (and web panel status)
+            # Show Turkish OSD message directly on Raspberry Pi HDMI screen (and web panel status).
+            # Using ONLY osd-msg1 (no show-text) ensures a single persistent line that stays on screen until reset!
             txt = _fmt_osd(rem)
             self.message = txt
             if s.get("reset_osd", True) and self.ipc.sock and rem != self.last_osd_rem:
                 self.last_osd_rem = rem
-                if elapsed <= 10 or rem in (30, 15) or 1 <= rem <= 10:
-                    self.ipc.set("osd-msg1", txt)
-                    try:
-                        self.ipc.command("show-text", txt, 2000, 1)
-                    except MpvError:
-                        pass
-                else:
-                    self.ipc.set("osd-msg1", "")
+                self.ipc.set("osd-msg1", txt)
+            elif not s.get("reset_osd", True) and self.ipc.sock and self.last_osd_rem is not None:
+                self.last_osd_rem = None
+                self.ipc.set("osd-msg1", "")
             return
-        if s.get("reset_osd", True) and self.ipc.sock:
-            txt = _fmt_osd(0)
-            self.ipc.set("osd-msg1", txt)
-            try:
-                self.ipc.command("show-text", txt, 3000, 1)
-            except MpvError:
-                pass
-            time.sleep(0.8)
+        if self.ipc.sock:
+            self.ipc.set("osd-msg1", _fmt_osd(0) if s.get("reset_osd", True) else "")
+            time.sleep(0.5)
         log.warning("ZAMANLI RESET tetiklendi: mod=%s, gecikme=%ss, tekrar=%s", mode, delay, s["reset_repeat"])
         if s["reset_repeat"] == "once":
             self.boot_reset_done = True
