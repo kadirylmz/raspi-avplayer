@@ -40,7 +40,6 @@ def build_mpv_args(video: str, s: dict, audio_dev: Optional[str], hwdec: str,
                    sock: str, vo_args: Optional[list[str]] = None) -> list[str]:
     args = [
         "mpv", "--no-config", video,
-        "--profile=fast",
         "--fs", "--no-input-terminal", "--idle=no", "--force-window=yes",
         "--osd-level=0", "--no-osc", "--no-input-default-bindings", "--input-vo-keyboard=no",
         "--cursor-autohide=always", "--no-border",
@@ -50,7 +49,7 @@ def build_mpv_args(video: str, s: dict, audio_dev: Optional[str], hwdec: str,
         "--vd-lavc-dr=yes", "--vd-lavc-threads=4",
         "--scale=bilinear", "--cscale=bilinear", "--dscale=bilinear",
         "--dither=no", "--correct-downscaling=no", "--linear-downscaling=no", "--sigmoid-upscaling=no",
-        "--hdr-compute-peak=no", "--deband=no",
+        "--deband=no",
         f"--video-sync={s['video_sync']}", "--framedrop=decoder+vo", "--interpolation=no",
         "--cache=yes", "--demuxer-max-bytes=96MiB", "--demuxer-readahead-secs=15",
         "--audio-channels=stereo", "--audio-buffer=0.3", "--gapless-audio=no",
@@ -61,9 +60,7 @@ def build_mpv_args(video: str, s: dict, audio_dev: Optional[str], hwdec: str,
     if vo_args is not None:
         args += vo_args
     else:
-        # On Pi 4 / Pi 5 console (no X11/Wayland), vo=drm uses DRM/KMS hardware planes directly
-        # (zero GPU shader overhead), falling back to vo=gpu with DRM context if needed.
-        args += ["--vo=drm,gpu", "--gpu-context=drm"]
+        args += ["--vo=gpu,drm", "--gpu-context=drm"]
     if audio_dev:
         args.append(f"--audio-device={audio_dev}")
     return args
