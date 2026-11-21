@@ -50,8 +50,51 @@ function route() {
   clearInterval(timer);
   page = (location.hash.match(/#\/(\w+)/) || [, "panel"])[1];
   document.querySelectorAll("nav a").forEach(a => a.classList.toggle("on", a.dataset.p === page));
-  const pages = { panel, videos, devices: devicesPage, settings, logs };
+  const pages = { panel, welcome, videos, devices: devicesPage, settings, logs };
   (pages[page] || panel)();
+}
+
+function renderHeroCard(st, full = false) {
+  const p = st.player, sys = st.system, s = st.settings;
+  const hasLogo = !!s.logo_file, hasBg = !!s.bg_file;
+  const compName = s.company_name || "AV PLAYER SYSTEM";
+  const subTitle = s.welcome_subtitle || "";
+  const bgStyle = hasBg ? `background-image:url('${base}/api/branding/background?t=${encodeURIComponent(s.bg_file)}')` : "";
+  const now = new Date();
+  return `<div class="hero-wrap ${full ? "full" : ""}" id="herocard" style="grid-column:1/-1;${bgStyle}">
+    <div class="hero-glass">
+      ${hasLogo ? `<img class="hero-logo" src="${base}/api/branding/logo?t=${encodeURIComponent(s.logo_file)}">` : ""}
+      <div class="hero-title">${esc(compName)}</div>
+      ${subTitle ? `<div class="hero-sub">${esc(subTitle)}</div>` : ""}
+      ${s.welcome_show_clock !== false ? `<div class="hero-clock">${now.toLocaleTimeString("tr-TR")}</div>
+      <div class="hero-date">${now.toLocaleDateString("tr-TR", { weekday: "long", year: "numeric", month: "long", day: "numeric" })}</div>` : `<div style="height:18px"></div>`}
+      <div class="hero-pills">
+        <span class="badge acc" style="padding:5px 14px;font-size:13px">${esc(p.message || "Karşılama & Bekleme Ekranı Aktif")}</span>
+        ${s.welcome_show_ip !== false ? `<span class="badge" style="padding:5px 14px;font-size:13px">${esc(st.name)} · ${sys.ips.join(", ") || "offline"}</span>` : ""}
+        ${sys.temp ? `<span class="badge" style="padding:5px 14px;font-size:13px">${sys.temp} °C</span>` : ""}
+      </div>
+      <div class="row" style="justify-content:center;margin-top:20px">
+        <button class="pri" onclick="pl('play')">▶ Videoyu Şimdi Başlat</button>
+        <button onclick="goFullscreen('#herocard')">⛶ Tam Ekran Yap</button>
+        <button onclick="location.hash='#/settings'">⚙ Arka Plan / Logo Ayarla</button>
+      </div>
+    </div>
+  </div>`;
+}
+function goFullscreen(sel) {
+  const el = $(sel) || document.documentElement;
+  if (document.fullscreenElement) document.exitFullscreen();
+  else if (el.requestFullscreen) el.requestFullscreen();
+}
+function welcome() {
+  $("#view").innerHTML = `<div id="wview"><p class="mut">Yükleniyor…</p></div>`;
+  poll(async () => {
+    try {
+      const st = await api("/api/status");
+      $("#hdot").className = "dot ok";
+      $("#wview").innerHTML = renderHeroCard(st, true);
+    } catch (e) { $("#hdot").className = "dot bad"; }
+  }, 1000);
 }
 async function banner(st) {
   const b = [];
@@ -82,15 +125,7 @@ function panel() {
       if (hasLogo && !$("#hlogo").dataset.loaded) { $("#hlogo").src = `${base}/api/branding/logo`; $("#hlogo").dataset.loaded = s.logo_file; }
     }
     if ($("#hclock")) $("#hclock").textContent = new Date().toLocaleTimeString("tr-TR") + " · " + new Date().toLocaleDateString("tr-TR");
-    const standbyHtml = (!v || p.state === "idle" || p.state === "ended" || p.state === "standby") ? `
-      <div class="card" style="grid-column:1/-1;text-align:center;padding:28px 18px;background:linear-gradient(145deg,#111822,#161b22);border-color:#2a3a4e">
-        ${hasLogo ? `<img src="${base}/api/branding/logo?t=${encodeURIComponent(s.logo_file)}" style="max-height:110px;max-width:280px;object-fit:contain;margin-bottom:12px">` : ""}
-        <div style="font-size:24px;font-weight:800;letter-spacing:1.5px">${esc(compName)}</div>
-        ${subTitle ? `<div class="mut" style="margin-top:4px">${esc(subTitle)}</div>` : ""}
-        <div style="font-size:38px;font-weight:700;margin:14px 0 4px;color:var(--acc);font-variant-numeric:tabular-nums">${new Date().toLocaleTimeString("tr-TR")}</div>
-        <div class="sm mut">${new Date().toLocaleDateString("tr-TR", { weekday: "long", year: "numeric", month: "long", day: "numeric" })} · ${esc(st.name)} (${sys.ips.join(", ") || "offline"})</div>
-        <div class="sm" style="margin-top:10px"><span class="badge acc">${esc(p.message || "HDMI Karşılama & Bekleme Ekranı Aktif")}</span> <a href="#/settings" class="sm mut" style="margin-left:8px;color:var(--acc)">Logo / Şirket İsmini Düzenle →</a></div>
-      </div>` : "";
+    const standbyHtml = (!v || p.state === "idle" || p.state === "ended" || p.state === "standby") ? renderHeroCard(st, false) : "";
     $("#dash").innerHTML = `
     <div class="grid">
       ${standbyHtml}
@@ -353,13 +388,21 @@ async function settings() {
       </div>
       <div>
         <p><b>Kurumsal Logo:</b></p>
-        ${s.logo_file ? `<div style="margin-bottom:10px;padding:12px;background:#0a0e14;border:1px solid var(--line);border-radius:8px;display:inline-block"><img src="${base}/api/branding/logo?t=${Date.now()}" style="max-height:90px;max-width:240px;object-fit:contain;display:block"></div>` : `<p class="sm mut">Henüz logo yüklenmedi.</p>`}
+        ${s.logo_file ? `<div style="margin-bottom:10px;padding:12px;background:#0a0e14;border:1px solid var(--line);border-radius:8px;display:inline-block"><img src="${base}/api/branding/logo?t=${Date.now()}" style="max-height:80px;max-width:220px;object-fit:contain;display:block"></div>` : `<p class="sm mut">Henüz logo yüklenmedi.</p>`}
         <div class="row">
           <button onclick="$('#logofile').click()">Logo Yükle (PNG / JPG / SVG)</button>
           <input type="file" id="logofile" accept=".png,.jpg,.jpeg,.svg,.webp" hidden onchange="uploadLogo(this.files[0])">
           ${s.logo_file ? `<button class="dng" onclick="deleteLogo()">Logoyu Kaldır</button>` : ""}
         </div>
-        <p class="sm mut" style="margin-top:8px">Yüklenen logo hem web panelinin üst barında ve bekleme kartında hem de Raspberry Pi HDMI karşılama ekranında ortalanarak gösterilir.</p>
+        <hr style="border:0;border-top:1px solid var(--line);margin:14px 0">
+        <p><b>Tam Ekran Arka Plan Görseli (Background):</b></p>
+        ${s.bg_file ? `<div style="margin-bottom:10px;padding:6px;background:#0a0e14;border:1px solid var(--line);border-radius:8px;display:inline-block"><img src="${base}/api/branding/background?t=${Date.now()}" style="max-height:100px;max-width:240px;object-fit:cover;border-radius:6px;display:block"></div>` : `<p class="sm mut">Varsayılan koyu kurumsal arka plan kullanılıyor.</p>`}
+        <div class="row">
+          <button onclick="$('#bgfile').click()">Arka Plan Görseli Yükle (JPG / PNG / WEBP)</button>
+          <input type="file" id="bgfile" accept=".png,.jpg,.jpeg,.webp" hidden onchange="uploadBg(this.files[0])">
+          ${s.bg_file ? `<button class="dng" onclick="deleteBg()">Arka Planı Kaldır</button>` : ""}
+        </div>
+        <p class="sm mut" style="margin-top:8px">Yüklenen arka plan görseli ve logo, hem Web Karşılama Ekranında hem de Raspberry Pi HDMI ekranında ortadaki buzlu cam (glass) panelin arkasında tam ekran gösterilir.</p>
       </div>
     </div>
   </div>
@@ -421,6 +464,18 @@ const deleteLogo = () => confirm("Kurumsal logo kaldırılsın mı?") && act(asy
   if ($("#hlogo")) { delete $("#hlogo").dataset.loaded; $("#hlogo").style.display = "none"; }
   settings();
 }, "Logo kaldırıldı");
+async function uploadBg(file) {
+  if (!file) return;
+  await act(async () => {
+    const r = await fetch(`${base}/api/branding/background?filename=${encodeURIComponent(file.name)}`, { method: "PUT", headers: { "X-API-Key": key() }, body: file });
+    if (!r.ok) { const d = await r.json().catch(() => ({})); throw new Error(d.detail || ("HTTP " + r.status)); }
+    settings();
+  }, "Arka plan görseli yüklendi");
+}
+const deleteBg = () => confirm("Arka plan görseli kaldırılsın mı?") && act(async () => {
+  await api("/api/branding/background/delete", { method: "POST" });
+  settings();
+}, "Arka plan görseli kaldırıldı");
 async function saveReset() {
   const sel = $("#r_delay").value, mode = document.querySelector("input[name=rm]:checked").value, rep = $("#r_rep").value, en = $("#r_en").checked, osd = $("#r_osd").checked, txt = $("#r_txt").value;
   const values = { reset_enabled: en, reset_osd: osd, reset_osd_text: txt, reset_mode: mode, reset_delay: sel === "c" ? +$("#r_cust").value : +sel, reset_repeat: rep };

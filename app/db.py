@@ -84,6 +84,7 @@ DEFAULTS: dict[str, Any] = {
     "welcome_show_clock": True,
     "welcome_show_ip": True,
     "logo_file": "",
+    "bg_file": "",
     "auth_enabled": False,
     "api_key": "",
 }

@@ -255,3 +255,41 @@ def get_logo():
     if not name or not p.exists():
         raise HTTPException(404, "Logo yok")
     return FileResponse(p, headers={"Cache-Control": "no-store"})
+
+
+@router.put("/branding/background")
+async def upload_bg(request: Request, filename: str = "background.jpg"):
+    ext = Path(filename).suffix.lower()
+    if ext not in (".png", ".jpg", ".jpeg", ".webp"):
+        raise HTTPException(415, "Arka plan görseli PNG, JPG veya WEBP olmalıdır")
+    data = await request.body()
+    if not data or len(data) > 25 * 1024 * 1024:
+        raise HTTPException(400, "Geçersiz veya çok büyük arka plan dosyası (maks 25 MB)")
+    for old in config.DATA_DIR.glob("brand_bg.*"):
+        old.unlink(missing_ok=True)
+    dst = config.DATA_DIR / f"brand_bg{ext}"
+    dst.write_bytes(data)
+    db.put("bg_file", dst.name)
+    db.add_command("refresh_welcome")
+    log.info("Karşılama ekranı arka plan görseli yüklendi: %s (%d bayt)", dst.name, len(data))
+    return {"ok": True, "bg_file": dst.name}
+
+
+@router.delete("/branding/background")
+@router.post("/branding/background/delete")
+def delete_bg():
+    for old in config.DATA_DIR.glob("brand_bg.*"):
+        old.unlink(missing_ok=True)
+    db.put("bg_file", "")
+    db.add_command("refresh_welcome")
+    log.info("Karşılama ekranı arka plan görseli kaldırıldı")
+    return {"ok": True}
+
+
+@router.get("/branding/background")
+def get_bg():
+    name = db.get("bg_file") or ""
+    p = config.DATA_DIR / name
+    if not name or not p.exists():
+        raise HTTPException(404, "Arka plan görseli yok")
+    return FileResponse(p, headers={"Cache-Control": "no-store"})

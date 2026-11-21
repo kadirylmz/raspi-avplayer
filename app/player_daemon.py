@@ -75,8 +75,8 @@ def build_standby_args(bg_path: str, sock: str, vo_args: Optional[list[str]] = N
         "--fs", "--no-input-terminal", "--idle=yes", "--force-window=yes",
         "--image-display-duration=inf", "--loop-file=inf",
         "--osd-level=1", "--no-osc", "--no-input-default-bindings", "--input-vo-keyboard=no",
-        "--osd-font-size=40", "--osd-align-x=center", "--osd-align-y=bottom", "--osd-margin-y=50",
-        "--osd-color=#FFFFFFFF", "--osd-back-color=#B0080C12", "--osd-border-size=2",
+        "--osd-font-size=36", "--osd-align-x=center", "--osd-align-y=center", "--osd-margin-y=80",
+        "--osd-color=#FFFFFFFF", "--osd-back-color=#B80B1018", "--osd-border-size=2",
         "--cursor-autohide=always", "--no-border", "--msg-level=all=warn",
         f"--input-ipc-server={sock}",
     ]
@@ -85,33 +85,43 @@ def build_standby_args(bg_path: str, sock: str, vo_args: Optional[list[str]] = N
 
 
 def _ensure_standby_bg(s: dict) -> str:
-    """Create or pick the standby background image (uses uploaded brand logo if available, else dark canvas)."""
+    """Create or pick the 1920x1080 standby background image:
+    - Uses uploaded custom background (bg_file) if present (scaled & cropped to 1920x1080 with a dark vignette card)
+    - Overlays uploaded brand logo (logo_file) centered in the upper card area matching the web layout
+    """
     logo = s.get("logo_file") or ""
     logo_path = config.DATA_DIR / logo
+    bg_name = s.get("bg_file") or ""
+    bg_src = config.DATA_DIR / bg_name
     bg = config.RUN_DIR / "standby_bg.png"
     config.RUN_DIR.mkdir(parents=True, exist_ok=True)
-    if logo and logo_path.exists() and logo_path.suffix.lower() in (".png", ".jpg", ".jpeg", ".webp"):
-        # Composite logo centered in upper half of a 1920x1080 dark canvas using ffmpeg
-        try:
-            r = subprocess.run([
-                "ffmpeg", "-hide_banner", "-v", "error", "-y",
-                "-f", "lavfi", "-i", "color=c=#0d1117:s=1920x1080:d=1",
-                "-i", str(logo_path),
-                "-filter_complex", "[1:v]scale='min(460,iw)':'min(240,ih)':force_original_aspect_ratio=decrease[lg];[0:v][lg]overlay=(W-w)/2:160",
-                "-frames:v", "1", str(bg)
-            ], capture_output=True, timeout=15)
-            if r.returncode == 0 and bg.exists():
-                return str(bg)
-        except Exception:
-            pass
-    # Fallback: solid dark slate 1920x1080 frame
+    has_bg = bool(bg_name and bg_src.exists() and bg_src.suffix.lower() in (".png", ".jpg", ".jpeg", ".webp"))
+    has_logo = bool(logo and logo_path.exists() and logo_path.suffix.lower() in (".png", ".jpg", ".jpeg", ".webp"))
+    try:
+        inputs = []
+        if has_bg:
+            inputs += ["-i", str(bg_src)]
+            base_chain = "[0:v]scale=1920:1080:force_original_aspect_ratio=increase,crop=1920:1080,eq=brightness=-0.18:saturation=0.9,drawbox=x=310:y=120:w=1300:h=840:color=#0b1018@0.72:t=fill,drawbox=x=310:y=120:w=1300:h=840:color=#3b9eff@0.35:t=2[base]"
+        else:
+            inputs += ["-f", "lavfi", "-i", "color=c=#0b1018:s=1920x1080:d=1"]
+            base_chain = "[0:v]drawbox=x=310:y=120:w=1300:h=840:color=#131b26@0.92:t=fill,drawbox=x=310:y=120:w=1300:h=840:color=#2a3a4e@0.8:t=2[base]"
+        if has_logo:
+            inputs += ["-i", str(logo_path)]
+            fc = f"{base_chain};[1:v]scale='min(420,iw)':'min(200,ih)':force_original_aspect_ratio=decrease[lg];[base][lg]overlay=(W-w)/2:180"
+        else:
+            fc = base_chain.replace("[base]", "")
+        r = subprocess.run(["ffmpeg", "-hide_banner", "-v", "error", "-y", *inputs,
+                            "-filter_complex", fc, "-frames:v", "1", str(bg)],
+                           capture_output=True, timeout=20)
+        if r.returncode == 0 and bg.exists():
+            return str(bg)
+    except Exception:
+        pass
     if not bg.exists():
         try:
-            subprocess.run([
-                "ffmpeg", "-hide_banner", "-v", "error", "-y",
-                "-f", "lavfi", "-i", "color=c=#0d1117:s=1920x1080:d=1",
-                "-frames:v", "1", str(bg)
-            ], capture_output=True, timeout=10)
+            subprocess.run(["ffmpeg", "-hide_banner", "-v", "error", "-y",
+                            "-f", "lavfi", "-i", "color=c=#0d1117:s=1920x1080:d=1",
+                            "-frames:v", "1", str(bg)], capture_output=True, timeout=10)
         except Exception:
             pass
     return str(bg)
@@ -360,7 +370,7 @@ class Daemon:
             return
         threading.Thread(target=self._reader, args=(self.proc,), daemon=True).start()
         self.standby_mode = True
-        self.standby_sig = (s.get("logo_file"), s.get("company_name"), s.get("welcome_subtitle"),
+        self.standby_sig = (s.get("logo_file"), s.get("bg_file"), s.get("company_name"), s.get("welcome_subtitle"),
                             s.get("welcome_show_clock"), s.get("welcome_show_ip"))
         self.last_clock_str = ""
         deadline = time.monotonic() + 5.0
@@ -373,6 +383,11 @@ class Daemon:
     def _update_standby_osd(self, s: dict, status_note: str = "") -> None:
         if not self.ipc.sock:
             return
+        TR_DAYS = ("Pazartesi", "Salı", "Çarşamba", "Perşembe", "Cuma", "Cumartesi", "Pazar")
+        TR_MONTHS = ("", "Ocak", "Şubat", "Mart", "Nisan", "Mayıs", "Haziran",
+                     "Temmuz", "Ağustos", "Eylül", "Ekim", "Kasım", "Aralık")
+        lt = time.localtime()
+        date_tr = f"{lt.tm_mday} {TR_MONTHS[lt.tm_mon]} {lt.tm_year} {TR_DAYS[lt.tm_wday]}"
         lines = []
         comp = (s.get("company_name") or "").strip()
         sub = (s.get("welcome_subtitle") or "").strip()
@@ -380,16 +395,19 @@ class Daemon:
             lines.append(comp)
         if sub:
             lines.append(sub)
+        lines.append("")
         if s.get("welcome_show_clock", True):
-            lines.append(time.strftime("%H:%M:%S   ·   %d.%m.%Y"))
+            lines.append(time.strftime("Saat  %H:%M:%S"))
+            lines.append(date_tr)
+            lines.append("")
         info = [s.get("device_name") or "AV-Player"]
         if s.get("welcome_show_ip", True):
             ip_list = system.ips()
             if ip_list:
-                info.append("Panel: http://" + ip_list[0])
+                info.append("http://" + ip_list[0])
+        lines.append("   ·   ".join(info))
         if status_note:
-            info.append(status_note)
-        lines.append("  |  ".join(info))
+            lines.append(f"[ {status_note} ]")
         txt = "\n".join(lines)
         if txt != self.last_clock_str:
             self.last_clock_str = txt
@@ -438,7 +456,7 @@ class Daemon:
                         self._stop_mpv()
                         self._start(s)
                         return
-            cur_sig = (s.get("logo_file"), s.get("company_name"), s.get("welcome_subtitle"),
+            cur_sig = (s.get("logo_file"), s.get("bg_file"), s.get("company_name"), s.get("welcome_subtitle"),
                        s.get("welcome_show_clock"), s.get("welcome_show_ip"))
             if cur_sig != self.standby_sig:
                 (config.RUN_DIR / "standby_bg.png").unlink(missing_ok=True)

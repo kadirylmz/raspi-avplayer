@@ -39,4 +39,14 @@ video{width:100%;border-radius:8px;background:#000}
 .logline{font:12px ui-monospace,Consolas,monospace;padding:3px 0;border-bottom:1px solid #1b222c;word-break:break-word}
 .lv-ERROR,.lv-CRITICAL{color:var(--err)}.lv-WARNING{color:var(--warn)}
 .reset-mode{border-left:4px solid var(--acc)}.reset-mode.reboot{border-left-color:var(--err)}
-@media(max-width:640px){main{padding:10px}.big{font-size:24px}.vcard{grid-template-columns:1fr}}
+.hero-wrap{position:relative;border-radius:18px;overflow:hidden;min-height:440px;display:flex;align-items:center;justify-content:center;padding:36px 24px;border:1px solid #2a3a4e;background:radial-gradient(circle at 50% 20%,#182940 0%,#0b1018 75%);background-size:cover;background-position:center;box-shadow:0 20px 50px #0009}
+.hero-wrap.full{min-height:calc(100vh - 110px);border-radius:20px}
+.hero-wrap::before{content:"";position:absolute;inset:0;background:linear-gradient(180deg,rgba(8,12,18,.45) 0%,rgba(8,12,18,.78) 100%)}
+.hero-glass{position:relative;z-index:1;text-align:center;max-width:680px;width:100%;padding:38px 32px;border-radius:20px;background:rgba(13,19,28,.72);backdrop-filter:blur(16px);-webkit-backdrop-filter:blur(16px);border:1px solid rgba(255,255,255,.12);box-shadow:0 16px 40px rgba(0,0,0,.55)}
+.hero-logo{max-height:130px;max-width:320px;object-fit:contain;margin-bottom:16px;filter:drop-shadow(0 6px 18px rgba(0,0,0,.6))}
+.hero-title{font-size:32px;font-weight:800;letter-spacing:2px;color:#fff;text-shadow:0 2px 12px rgba(0,0,0,.6)}
+.hero-sub{font-size:15px;color:#b8c7d9;margin-top:6px;letter-spacing:.4px}
+.hero-clock{font-size:56px;font-weight:800;margin:20px 0 6px;color:#fff;font-variant-numeric:tabular-nums;letter-spacing:2px;text-shadow:0 0 28px rgba(59,158,255,.45)}
+.hero-date{font-size:14px;color:#9fb2c8;margin-bottom:18px}
+.hero-pills{display:flex;gap:10px;justify-content:center;flex-wrap:wrap;margin-top:14px}
+@media(max-width:640px){main{padding:10px}.big{font-size:24px}.vcard{grid-template-columns:1fr}.hero-clock{font-size:38px}.hero-title{font-size:22px}}
