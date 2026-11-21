@@ -118,7 +118,7 @@ def test_mpv_args():
     s = {"loop": True, "video_sync": "audio", "volume": 80, "mute": False}
     a = build_mpv_args("/v.mp4", s, "alsa/plughw:CARD=x,DEV=0", "no", "/run/s.sock")
     for need in ("--fs", "--loop-file=inf", "--hwdec=no", "--volume=80", "--audio-device=alsa/plughw:CARD=x,DEV=0",
-                 "--input-ipc-server=/run/s.sock", "--start=0", "--vo=gpu", "--gpu-context=drm"):
+                 "--input-ipc-server=/run/s.sock", "--start=0", "--vo=gpu", "--gpu-context=drm", "--osd-level=1"):
         assert need in a
 
 

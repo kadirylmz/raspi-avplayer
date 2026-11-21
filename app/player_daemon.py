@@ -46,9 +46,9 @@ def build_mpv_args(video: str, s: dict, audio_dev: Optional[str], hwdec: str,
     args = [
         "mpv", "--no-config", video,
         "--fs", "--no-input-terminal", "--idle=no", "--force-window=yes",
-        "--osd-level=0", "--no-osc", "--no-input-default-bindings", "--input-vo-keyboard=no",
-        "--osd-font-size=32", "--osd-align-x=right", "--osd-align-y=top", "--osd-margin-x=36", "--osd-margin-y=28",
-        "--osd-back-color=#B0000000", "--osd-border-size=2",
+        "--osd-level=1", "--no-osc", "--no-input-default-bindings", "--input-vo-keyboard=no",
+        "--osd-font-size=38", "--osd-align-x=center", "--osd-align-y=top", "--osd-margin-y=36",
+        "--osd-color=#FFFFFFFF", "--osd-back-color=#CC000000", "--osd-border-size=2",
         "--cursor-autohide=always", "--no-border",
         "--start=0", "--save-position-on-quit=no", "--resume-playback=no", "--keep-open=no",
         "--loop-file=" + ("inf" if s["loop"] else "no"),
@@ -410,31 +410,45 @@ class Daemon:
         rem = int(round(delay - elapsed))
         mode = s["reset_mode"]
         mode_tr = {
-            "player_restart": "Oynatıcı yeniden başlatılacak",
-            "service_restart": "Oynatma servisi yeniden başlatılacak",
-            "device_reboot": "Cihaz yeniden başlatılacak",
-        }.get(mode, "Yeniden başlatılacak")
+            "player_restart": "Video oynatıcı yeniden başlatılacaktır",
+            "service_restart": "Video oynatma servisi yeniden başlatılacaktır",
+            "device_reboot": "Cihaz (Raspberry Pi) yeniden başlatılacaktır",
+        }.get(mode, "Sistem yeniden başlatılacaktır")
         if elapsed < delay:
-            # Show on-screen OSD notification on HDMI display at start (first 6s) and final 10s countdown
+            # Show Turkish OSD message directly on Raspberry Pi HDMI screen (and web panel status)
+            self.message = f"{rem} saniye sonra {mode_tr.lower()}"
             if s.get("reset_osd", True) and self.ipc.sock and rem != self.last_osd_rem:
                 self.last_osd_rem = rem
-                if elapsed <= 6:
-                    txt = f"⏱ {delay // 60} dk sonra: {mode_tr} ({rem} sn)" if delay % 60 == 0 else f"⏱ {rem} sn sonra: {mode_tr}"
+                if elapsed <= 10:
+                    if delay == 60:
+                        txt = f"BİLGİ: 1 dakika sonra {mode_tr.lower()} ({rem} sn)"
+                    elif delay % 60 == 0:
+                        txt = f"BİLGİ: {delay // 60} dakika sonra {mode_tr.lower()} ({rem} sn)"
+                    else:
+                        txt = f"BİLGİ: {delay} saniye sonra {mode_tr.lower()} ({rem} sn)"
+                    self.ipc.set("osd-msg1", txt)
+                    try:
+                        self.ipc.command("show-text", txt, 2000, 1)
+                    except MpvError:
+                        pass
+                elif rem in (30, 15) or 1 <= rem <= 10:
+                    txt = f"UYARI: {rem} saniye sonra {mode_tr.lower()}..."
+                    self.ipc.set("osd-msg1", txt)
                     try:
                         self.ipc.command("show-text", txt, 1500, 1)
                     except MpvError:
                         pass
-                elif rem in (30, 15) or 1 <= rem <= 10:
-                    try:
-                        self.ipc.command("show-text", f"⏱ {rem} saniye sonra {mode_tr.lower()}...", 1300, 1)
-                    except MpvError:
-                        pass
+                else:
+                    self.ipc.set("osd-msg1", "")
             return
         if s.get("reset_osd", True) and self.ipc.sock:
+            txt = f"ŞİMDİ YENİDEN BAŞLATILIYOR: {mode_tr}"
+            self.ipc.set("osd-msg1", txt)
             try:
-                self.ipc.command("show-text", f"↻ {mode_tr}...", 2000, 1)
+                self.ipc.command("show-text", txt, 3000, 1)
             except MpvError:
                 pass
+            time.sleep(0.8)
         log.warning("ZAMANLI RESET tetiklendi: mod=%s, gecikme=%ss, tekrar=%s", mode, delay, s["reset_repeat"])
         if s["reset_repeat"] == "once":
             self.boot_reset_done = True
