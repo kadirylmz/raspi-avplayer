@@ -90,6 +90,8 @@ def put_settings(body: SettingsIn):
         errs.append("Ses seviyesi 0-130 olmalı")
     if "reset_delay" in v and not 5 <= int(v["reset_delay"]) <= 86400:
         errs.append("Reset süresi 5-86400 sn olmalı")
+    if "welcome_boot_sec" in v and not 0 <= int(v["welcome_boot_sec"]) <= 600:
+        errs.append("Açılış karşılama süresi 0-600 sn olmalı")
     if "reset_mode" in v and v["reset_mode"] not in ("player_restart", "service_restart", "device_reboot"):
         errs.append("Geçersiz reset modu")
     if "reset_repeat" in v and v["reset_repeat"] not in ("once", "periodic"):
@@ -111,7 +113,7 @@ def put_settings(body: SettingsIn):
             continue
         if k in BOOLS:
             x = bool(x)
-        elif k in ("volume", "reset_delay"):
+        elif k in ("volume", "reset_delay", "welcome_boot_sec"):
             x = int(x)
         elif k == "device_name":
             x = str(x).strip()[:40] or "AV-Player"
@@ -126,7 +128,7 @@ def put_settings(body: SettingsIn):
         (config.RUN_DIR / "boot_reset_done").unlink(missing_ok=True)
         (config.DATA_DIR / ".warm_reboot_done").unlink(missing_ok=True)
         db.add_command("rearm_reset")
-    if any(k in v for k in ("welcome_enabled", "company_name", "welcome_subtitle", "welcome_show_clock", "welcome_show_ip", "device_name")):
+    if any(k in v for k in ("welcome_enabled", "welcome_boot_sec", "company_name", "welcome_subtitle", "welcome_show_clock", "welcome_show_ip", "device_name")):
         db.add_command("refresh_welcome")
     log.info("Ayarlar güncellendi: %s", {k: x for k, x in v.items() if k != "api_key"})
     return {"ok": True}

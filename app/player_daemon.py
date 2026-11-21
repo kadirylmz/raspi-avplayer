@@ -168,6 +168,7 @@ class Daemon:
         self.standby_mode = False
         self.standby_sig: tuple = ()
         self.last_clock_str = ""
+        self.boot_welcome_until = 0.0
 
     # ---- lifecycle
     def run(self) -> None:
@@ -186,6 +187,11 @@ class Daemon:
             self.hw_help = subprocess.run(["mpv", "--hwdec=help"], capture_output=True, text=True, timeout=10).stdout
         except Exception as e:
             log.error("mpv bulunamadı/çalışmıyor: %s", e)
+        boot_sec = int(s.get("welcome_boot_sec") or 0)
+        if s.get("welcome_enabled", True) and boot_sec > 0:
+            self.boot_welcome_until = time.monotonic() + boot_sec
+            self._set("standby", f"Karşılama ekranı ({boot_sec} sn sonra video başlayacak)")
+            self._start_standby(s, self.message)
         while not self.stop_flag:
             try:
                 self.tick()
@@ -414,18 +420,24 @@ class Daemon:
 
         if self.state == "rebooting":
             return
+        in_boot_welcome = now < self.boot_welcome_until
         if self.alive() and self.standby_mode:
-            # In standby / welcome screen mode: check if a playable video was activated or play was requested
+            # In standby / welcome screen mode: check if boot welcome countdown is active or if a playable video is ready
             if not s.get("welcome_enabled", True):
+                self.boot_welcome_until = 0.0
                 self._stop_mpv()
                 return
-            vid = s["active_video_id"]
-            if self.want_play and vid and (vid, None) != self.blocked:
-                v = db.q1("SELECT * FROM videos WHERE id=?", (vid,))
-                if v and v["status"] == "ready" and (vid, v["playable_path"]) != self.blocked:
-                    self._stop_mpv()
-                    self._start(s)
-                    return
+            if in_boot_welcome:
+                rem_w = max(1, int(round(self.boot_welcome_until - now)))
+                self._set("standby", f"Karşılama ekranı · {rem_w} saniye sonra video başlayacaktır")
+            else:
+                vid = s["active_video_id"]
+                if self.want_play and vid and (vid, None) != self.blocked:
+                    v = db.q1("SELECT * FROM videos WHERE id=?", (vid,))
+                    if v and v["status"] == "ready" and (vid, v["playable_path"]) != self.blocked:
+                        self._stop_mpv()
+                        self._start(s)
+                        return
             cur_sig = (s.get("logo_file"), s.get("company_name"), s.get("welcome_subtitle"),
                        s.get("welcome_show_clock"), s.get("welcome_show_ip"))
             if cur_sig != self.standby_sig:
@@ -468,6 +480,10 @@ class Daemon:
                     time.sleep(0.3)  # let the reader thread drain the pipe
                     log.error("mpv çıktısı (son satırlar): %s", " | ".join(self.tail) or "<boş>")
                     self._failure(f"mpv çöktü (çıkış kodu {rc})")
+            elif in_boot_welcome and s.get("welcome_enabled", True):
+                rem_w = max(1, int(round(self.boot_welcome_until - now)))
+                self._set("standby", f"Karşılama ekranı · {rem_w} saniye sonra video başlayacaktır")
+                self._start_standby(s, self.message)
             elif self.want_play and self.state not in ("ended", "error"):
                 if now >= self.next_try:
                     self._start(s)
@@ -642,15 +658,20 @@ class Daemon:
     def _command(self, cmd: str, arg) -> None:
         log.info("Komut: %s", cmd)
         if cmd == "play":
+            self.boot_welcome_until = 0.0
             self.want_play, self.blocked, self.fails, self.fast_fails, self.next_try = True, None, 0, 0, 0
             self.hwdec_override = None
-            if self.state in ("ended", "error", "idle"):
+            if self.standby_mode:
+                self._stop_mpv()
+            if self.state in ("ended", "error", "idle", "standby"):
                 self._set("starting")
         elif cmd == "stop":
+            self.boot_welcome_until = 0.0
             self.want_play = False
             self._stop_mpv()
             self._set("idle", "Durduruldu")
         elif cmd == "restart":  # PLAYER RESTART
+            self.boot_welcome_until = 0.0
             self._stop_mpv()
             self.want_play, self.blocked, self.fails, self.fast_fails, self.next_try = True, None, 0, 0, 0
             self.hwdec_override = None

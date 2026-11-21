@@ -78,6 +78,7 @@ DEFAULTS: dict[str, Any] = {
     "reset_osd": True,                 # show OSD warning on HDMI screen before reset
     "reset_osd_text": "{saniye} saniye sonra sistem yeniden başlatılacaktır",
     "welcome_enabled": True,           # show welcome/standby screen on HDMI when idle or no video
+    "welcome_boot_sec": 30,            # show welcome screen for N seconds on boot before starting video
     "company_name": "AV PLAYER SYSTEM",
     "welcome_subtitle": "Profesyonel Medya & Gösterim Sistemi",
     "welcome_show_clock": True,

@@ -28,7 +28,7 @@ const dur = s => { s = Math.round(s || 0); const h = Math.floor(s / 3600), m = M
 const uptime = s => { const d = Math.floor(s / 86400), h = Math.floor(s % 86400 / 3600), m = Math.floor(s % 3600 / 60); return (d ? d + "g " : "") + h + "sa " + m + "dk"; };
 const mbps = b => b ? (b / 1e6).toFixed(1) + " Mbps" : "-";
 const bar = (p, warn = 75, bad = 90) => `<div class="bar ${p >= bad ? "bad" : p >= warn ? "warn" : ""}"><i style="width:${Math.min(p, 100)}%"></i></div>`;
-const STATES = { playing: ["OYNATIYOR", "ok"], paused: ["DURAKLATILDI", "warn"], starting: ["BAŞLATILIYOR", "acc"], idle: ["DURDURULDU", ""], ended: ["BİTTİ", ""], error: ["HATA", "bad"], retrying: ["TEKRAR DENENİYOR", "warn"], rebooting: ["CİHAZ YENİDEN BAŞLIYOR", "bad"], service_down: ["PLAYER SERVİSİ KAPALI", "bad"] };
+const STATES = { playing: ["OYNATIYOR", "ok"], paused: ["DURAKLATILDI", "warn"], starting: ["BAŞLATILIYOR", "acc"], standby: ["KARŞILAMA EKRANI", "acc"], idle: ["DURDURULDU", ""], ended: ["BİTTİ", ""], error: ["HATA", "bad"], retrying: ["TEKRAR DENENİYOR", "warn"], rebooting: ["CİHAZ YENİDEN BAŞLIYOR", "bad"], service_down: ["PLAYER SERVİSİ KAPALI", "bad"] };
 const MODES = { player_restart: "PLAYER RESTART – sadece mpv süreci", service_restart: "PLAYER SERVICE RESTART – systemd servisi", device_reboot: "DEVICE REBOOT – Raspberry Pi gerçekten yeniden başlar" };
 const vinfo = v => v ? `${v.width}x${v.height} · ${v.fps} fps${v.vfr ? " (VFR)" : " (CFR)"} · ${esc(v.codec).toUpperCase()} · ${mbps(v.bitrate)} · ${v.pix_fmt}` : "-";
 const ainfo = a => a ? `${esc(a.codec)} · ${a.channels} kanal · ${a.sample_rate} Hz` : "ses yok";
@@ -82,14 +82,14 @@ function panel() {
       if (hasLogo && !$("#hlogo").dataset.loaded) { $("#hlogo").src = `${base}/api/branding/logo`; $("#hlogo").dataset.loaded = s.logo_file; }
     }
     if ($("#hclock")) $("#hclock").textContent = new Date().toLocaleTimeString("tr-TR") + " · " + new Date().toLocaleDateString("tr-TR");
-    const standbyHtml = (!v || p.state === "idle" || p.state === "ended") ? `
+    const standbyHtml = (!v || p.state === "idle" || p.state === "ended" || p.state === "standby") ? `
       <div class="card" style="grid-column:1/-1;text-align:center;padding:28px 18px;background:linear-gradient(145deg,#111822,#161b22);border-color:#2a3a4e">
         ${hasLogo ? `<img src="${base}/api/branding/logo?t=${encodeURIComponent(s.logo_file)}" style="max-height:110px;max-width:280px;object-fit:contain;margin-bottom:12px">` : ""}
         <div style="font-size:24px;font-weight:800;letter-spacing:1.5px">${esc(compName)}</div>
         ${subTitle ? `<div class="mut" style="margin-top:4px">${esc(subTitle)}</div>` : ""}
         <div style="font-size:38px;font-weight:700;margin:14px 0 4px;color:var(--acc);font-variant-numeric:tabular-nums">${new Date().toLocaleTimeString("tr-TR")}</div>
         <div class="sm mut">${new Date().toLocaleDateString("tr-TR", { weekday: "long", year: "numeric", month: "long", day: "numeric" })} · ${esc(st.name)} (${sys.ips.join(", ") || "offline"})</div>
-        <div class="sm" style="margin-top:10px"><span class="badge acc">HDMI Karşılama &amp; Bekleme Ekranı Aktif</span> <a href="#/settings" class="sm mut" style="margin-left:8px;color:var(--acc)">Logo / Şirket İsmini Düzenle →</a></div>
+        <div class="sm" style="margin-top:10px"><span class="badge acc">${esc(p.message || "HDMI Karşılama & Bekleme Ekranı Aktif")}</span> <a href="#/settings" class="sm mut" style="margin-left:8px;color:var(--acc)">Logo / Şirket İsmini Düzenle →</a></div>
       </div>` : "";
     $("#dash").innerHTML = `
     <div class="grid">
@@ -343,7 +343,8 @@ async function settings() {
     <p class="sm mut">İlk açılışta aktif video yoksa veya oynatma durdurulduğunda hem Raspberry Pi HDMI ekranında hem de Panel Yönetici ekranında bu karşılama alanı gösterilir.</p>
     <div class="grid" style="grid-template-columns:repeat(auto-fit,minmax(260px,1fr));align-items:start">
       <div>
-        <p><label>${chk("w_en", s.welcome_enabled !== false)} Video yokken / durdurulduğunda HDMI Karşılama Ekranını göster</label></p>
+        <p><label>${chk("w_en", s.welcome_enabled !== false)} İlk açılışta ve video yokken/durdurulduğunda HDMI Karşılama Ekranını göster</label></p>
+        <p>İlk açılışta Karşılama Ekranı bekleme süresi (saniye):<br><input id="w_sec" type="number" min="0" max="600" style="width:120px" value="${s.welcome_boot_sec ?? 30}"> <span class="sm mut">sn (varsayılan 30 sn sonra video otomatik başlar, 0 = bekleme yok)</span></p>
         <p>Şirket / Kurum İsmi:<br><input id="w_comp" style="width:100%" value="${esc(s.company_name ?? "AV PLAYER SYSTEM")}" placeholder="Ör. MÜZE & SERGİ TEKNOLOJİLERİ"></p>
         <p>Alt Başlık / Karşılama Mesajı:<br><input id="w_sub" style="width:100%" value="${esc(s.welcome_subtitle ?? "Profesyonel Medya & Gösterim Sistemi")}" placeholder="Ör. Hoş Geldiniz · Bekleme Modu"></p>
         <p><label>${chk("w_clk", s.welcome_show_clock !== false)} Bekleme ekranında canlı Saat ve Tarih göster</label></p>
@@ -405,7 +406,7 @@ const retest = b => { b.disabled = true; b.textContent = "Test ediliyor…"; act
 async function put(values, msg, extra) { return act(() => api("/api/settings", { method: "PUT", json: Object.assign({ values }, extra || {}) }), msg || "Kaydedildi"); }
 const saveGeneral = () => put({ device_name: $("#s_name").value, boot_autoplay: $("#s_boot").checked, autoplay: $("#s_auto").checked, loop: $("#s_loop").checked, video_sync: $("#s_sync").value, hwdec: $("#s_hwdec").value, prefer_hw_encode: $("#s_hwenc").checked });
 const saveAudio = () => put({ audio_output: document.querySelector("input[name=ao]:checked").value }, "Ses çıkışı uygulandı");
-const saveBranding = () => put({ welcome_enabled: $("#w_en").checked, company_name: $("#w_comp").value, welcome_subtitle: $("#w_sub").value, welcome_show_clock: $("#w_clk").checked, welcome_show_ip: $("#w_ip").checked }, "Karşılama ekranı ayarları kaydedildi");
+const saveBranding = () => put({ welcome_enabled: $("#w_en").checked, welcome_boot_sec: +$("#w_sec").value, company_name: $("#w_comp").value, welcome_subtitle: $("#w_sub").value, welcome_show_clock: $("#w_clk").checked, welcome_show_ip: $("#w_ip").checked }, "Karşılama ekranı ayarları kaydedildi");
 async function uploadLogo(file) {
   if (!file) return;
   await act(async () => {
