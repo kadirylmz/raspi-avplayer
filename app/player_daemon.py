@@ -76,7 +76,7 @@ def build_standby_args(bg_path: str, sock: str, vo_args: Optional[list[str]] = N
         "--image-display-duration=inf", "--loop-file=inf",
         "--osd-level=1", "--no-osc", "--no-input-default-bindings", "--input-vo-keyboard=no",
         "--osd-font-size=78", "--osd-bold=yes",
-        "--osd-align-x=center", "--osd-align-y=top", "--osd-margin-y=615",
+        "--osd-align-x=center", "--osd-align-y=center",
         "--osd-color=#FFFFFFFF", "--osd-back-color=#00000000",
         "--osd-border-size=2", "--osd-border-color=#663B9EFF", "--osd-shadow-offset=3", "--osd-shadow-color=#99000000",
         "--cursor-autohide=always", "--no-border", "--msg-level=all=warn",
@@ -471,8 +471,8 @@ class Daemon:
         if not self.ipc.sock:
             return
         # Company name, subtitle and date are baked into the rounded glass card by Pillow (_ensure_standby_bg).
-        # Here mpv renders ONLY the large bold 78pt live HH:MM:SS clock in the center slot!
-        txt = time.strftime("%H:%M:%S") if s.get("welcome_show_clock", True) else ""
+        # With --osd-align-y=center, leading newlines push the 78pt bold live clock down to Y=655 (between subtitle and date).
+        txt = ("\n\n\n" + time.strftime("%H:%M:%S")) if s.get("welcome_show_clock", True) else ""
         if txt != self.last_clock_str:
             self.last_clock_str = txt
             self.ipc.set("osd-msg1", txt)
