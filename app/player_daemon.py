@@ -269,6 +269,7 @@ class Daemon:
         self.boot_reset_done = False          # tracks "once per boot" reset execution
         self.last_osd_rem: Optional[int] = None
         self.standby_mode = False
+        self.exe_mode = False
         self.standby_sig: tuple = ()
         self.last_clock_str = ""
         self.boot_welcome_until = 0.0
@@ -386,7 +387,58 @@ class Daemon:
                 self.last_error = line[:200]
                 log.warning("mpv: %s", line[:300])
 
+    def _start_exe(self, s: dict) -> None:
+        exe_path = (s.get("exe_path") or "").strip().strip('"')
+        if not exe_path:
+            self._set("idle", "EXE uygulama yolu seçilmedi")
+            if s.get("welcome_enabled", True):
+                self._start_standby(s, "EXE uygulama yolu seçilmedi - Bekleme Ekranı")
+            return
+        sig = ("exe", exe_path, s.get("exe_args", ""), s.get("exe_workdir", ""))
+        if self.blocked == sig:
+            if s.get("welcome_enabled", True) and not self.alive():
+                self._start_standby(s, "EXE bekleniyor")
+            return
+        p = Path(exe_path)
+        if not p.exists() or not p.is_file():
+            self.blocked = sig
+            self._set("error", f"EXE dosyası bulunamadı: {exe_path}")
+            log.error("EXE bulunamadı: %s", exe_path)
+            if s.get("welcome_enabled", True):
+                self._start_standby(s, "EXE dosyası bulunamadı")
+            return
+        if self.standby_mode:
+            self._stop_mpv()
+        (config.RUN_DIR / "standby_bg.png").unlink(missing_ok=True)
+        extra = shlex.split(s.get("exe_args") or "", posix=(os.name != "nt"))
+        extra = [a.strip('"') for a in extra]
+        cmd = [str(p)] + extra
+        cwd = (s.get("exe_workdir") or "").strip().strip('"') or str(p.parent)
+        log.info("EXE uygulaması başlatılıyor: %s (dizin=%s)", " ".join(cmd), cwd)
+        self.tail.clear()
+        try:
+            self.proc = subprocess.Popen(cmd, cwd=cwd if Path(cwd).exists() else str(p.parent),
+                                         stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, errors="replace")
+        except Exception as e:
+            self._failure(f"EXE başlatılamadı: {e}")
+            return
+        threading.Thread(target=self._reader, args=(self.proc,), daemon=True).start()
+        self.started_at = time.monotonic()
+        self.play_started = time.monotonic()
+        self.standby_mode = False
+        self.exe_mode = True
+        self.running_video = None
+        self.running_sig = sig
+        self.applied = {"playback_mode": "exe", "exe_sig": sig}
+        self.fails = self.fast_fails = 0
+        self.restarts += 1
+        self._set("playing", f"EXE çalışıyor: {p.name}")
+        self._write_state(s)
+
     def _start(self, s: dict) -> None:
+        if s.get("playback_mode") == "exe":
+            self._start_exe(s)
+            return
         vid = s["active_video_id"]
         v = db.q1("SELECT * FROM videos WHERE id=?", (vid,)) if vid else None
         if not v:
@@ -475,7 +527,11 @@ class Daemon:
     def _stop_mpv(self) -> None:
         self.ipc.close()
         if self.proc and self.proc.poll() is None:
-            self.proc.terminate()
+            if self.exe_mode and os.name == "nt":
+                subprocess.run(["taskkill", "/F", "/T", "/PID", str(self.proc.pid)],
+                               capture_output=True, timeout=6)
+            else:
+                self.proc.terminate()
             try:
                 self.proc.wait(timeout=4)
             except subprocess.TimeoutExpired:
@@ -485,6 +541,7 @@ class Daemon:
         self.play_started = None
         self.running_video = None
         self.standby_mode = False
+        self.exe_mode = False
         self.stats = {}
 
     def _start_standby(self, s: dict, status_note: str = "Bekleme Modu") -> None:
@@ -562,7 +619,15 @@ class Daemon:
                 return
             if in_boot_welcome:
                 rem_w = max(1, int(round(self.boot_welcome_until - now)))
-                self._set("standby", f"Karşılama ekranı · {rem_w} saniye sonra video başlayacaktır")
+                target_lbl = "EXE uygulaması" if s.get("playback_mode") == "exe" else "video"
+                self._set("standby", f"Karşılama ekranı · {rem_w} saniye sonra {target_lbl} başlayacaktır")
+            elif s.get("playback_mode") == "exe":
+                exe_path = (s.get("exe_path") or "").strip().strip('"')
+                sig = ("exe", exe_path, s.get("exe_args", ""), s.get("exe_workdir", ""))
+                if self.want_play and exe_path and Path(exe_path).is_file() and sig != self.blocked:
+                    self._stop_mpv()
+                    self._start(s)
+                    return
             else:
                 vid = s["active_video_id"]
                 if self.want_play and vid and (vid, None) != self.blocked:
@@ -579,8 +644,25 @@ class Daemon:
                 self._start_standby(s, self.message or "Bekleme Modu")
                 return
             self._update_standby_osd(s, self.message or "Bekleme Modu")
+        elif self.alive() and self.exe_mode:
+            exe_sig = ("exe", (s.get("exe_path") or "").strip().strip('"'), s.get("exe_args", ""), s.get("exe_workdir", ""))
+            if s.get("playback_mode") != "exe" or exe_sig != self.applied.get("exe_sig") or not self.want_play:
+                log.info("EXE ayarı/modu değişti, yeniden başlatılıyor" if self.want_play else "EXE durduruldu")
+                self._stop_mpv()
+                self._set("idle" if not self.want_play else "starting", "Durduruldu" if not self.want_play else "")
+                if not self.want_play and s.get("welcome_enabled", True):
+                    self._start_standby(s, "EXE Durduruldu - Bekleme Modu")
+            else:
+                try:
+                    p_info = psutil.Process(self.proc.pid)  # type: ignore[arg-type]
+                    rss = round(p_info.memory_info().rss / 2**20)
+                    self.stats = {"rss_mb": rss, "vcodec": "WINDOWS EXE", "hwdec": f"PID {self.proc.pid}"}  # type: ignore[union-attr]
+                except Exception:
+                    pass
+                self._reset_tick(s, now)
         elif self.alive():
-            if (self.running_video != s["active_video_id"]
+            if (s.get("playback_mode") == "exe"
+                    or self.running_video != s["active_video_id"]
                     or self.applied.get("video_sync") != s["video_sync"]
                     or self.applied.get("hwdec_s") != s["hwdec"]
                     or not self.want_play):
@@ -597,12 +679,20 @@ class Daemon:
             if self.proc is not None:  # process exited
                 rc = self.proc.returncode
                 was_standby = self.standby_mode
+                was_exe = self.exe_mode
                 self.ipc.close()
                 self.proc = None
                 self.play_started = None
                 self.standby_mode = False
+                self.exe_mode = False
                 if was_standby:
                     pass
+                elif was_exe:
+                    if rc == 0 and not s["loop"]:
+                        self._set("ended", "EXE uygulaması kapandı (otomatik tekrar kapalı)")
+                        log.info("EXE uygulaması kapandı (rc=0)")
+                    else:
+                        self._failure(f"EXE uygulaması kapandı/çöktü (çıkış kodu {rc})")
                 elif rc == 0 and not s["loop"]:
                     self._set("ended", "Video sona erdi (döngü kapalı)")
                     self.ended_video = self.running_sig[:1]

@@ -117,7 +117,11 @@ function panel() {
       if (hasLogo && !$("#hlogo").dataset.loaded) { $("#hlogo").src = `${base}/api/branding/logo`; $("#hlogo").dataset.loaded = s.logo_file; }
     }
     if ($("#hclock")) $("#hclock").textContent = new Date().toLocaleTimeString("tr-TR") + " · " + new Date().toLocaleDateString("tr-TR");
-    const standbyHtml = (!v || p.state === "idle" || p.state === "ended" || p.state === "standby") ? renderHeroCard(st, false) : "";
+    const isExe = s.playback_mode === "exe";
+    const exeName = s.exe_path ? s.exe_path.split(/[\\/]/).pop() : "";
+    const activeTitle = isExe ? (exeName ? `EXE: ${exeName}` : "EXE uygulama yolu seçilmedi") : (v ? v.name : "Video seçilmedi (Bekleme Ekranında)");
+    const activeSub = isExe ? (s.exe_path ? `${s.exe_path} ${s.exe_args || ""}` : "Ayarlar sayfasından .exe yolu girin veya yükleyin") : (v ? vinfo(v.conv_probe ? v.conv_probe.video : v.probe && v.probe.video) : "");
+    const standbyHtml = ((!isExe && !v) || (isExe && !s.exe_path) || p.state === "idle" || p.state === "ended" || p.state === "standby") ? renderHeroCard(st, false) : "";
     $("#dash").innerHTML = `
     <div class="grid">
       ${standbyHtml}
@@ -125,17 +129,18 @@ function panel() {
         <div class="row sp"><div class="row" style="gap:14px">
           ${hasLogo ? `<img src="${base}/api/branding/logo?t=${encodeURIComponent(s.logo_file)}" style="max-height:54px;max-width:140px;object-fit:contain;border-radius:6px">` : ""}
           <div><h3>${esc(compName)} · ${esc(st.name)} (${esc(sys.model)})</h3>
-          <div class="big">${esc(v ? v.name : "Video seçilmedi (Bekleme Ekranında)")}</div>
-          <div class="mut">${v ? vinfo(v.conv_probe ? v.conv_probe.video : v.probe && v.probe.video) : ""}</div></div></div>
+          <div class="big">${esc(activeTitle)}</div>
+          <div class="mut">${esc(activeSub)}</div></div></div>
           <div style="text-align:right"><div style="font-size:20px;font-weight:700;font-variant-numeric:tabular-nums;margin-bottom:6px">${new Date().toLocaleTimeString("tr-TR")}</div>
           <span class="badge ${cls}" style="font-size:15px;padding:6px 14px">${lab}</span>
           ${p.message ? `<div class="sm mut" style="margin-top:6px;max-width:340px">${esc(p.message)}</div>` : ""}</div></div>
         ${S.duration ? `<div style="margin:12px 0 4px">${bar(S.time_pos / S.duration * 100, 101, 101)}<div class="sm mut row sp"><span>${dur(S.time_pos)}</span><span>${dur(S.duration)}</span></div></div>` : ""}
         <div class="row" style="margin-top:10px">
-          <button class="pri" onclick="pl('play')">▶ Oynat</button>
+          <button class="pri" onclick="pl('play')">▶ ${isExe ? "EXE Başlat" : "Oynat"}</button>
           <button onclick="pl('stop')">■ Durdur</button>
-          <button onclick="pl('restart')" title="Sadece mpv süreci yeniden başlar">↻ Oynatıcıyı Yeniden Başlat</button>
-          <span class="badge">${s.loop ? "🔁 Döngü açık" : "Döngü kapalı"}</span>
+          <button onclick="pl('restart')" title="Sadece oynatıcı/EXE süreci yeniden başlar">↻ ${isExe ? "EXE'yi Yeniden Başlat" : "Oynatıcıyı Yeniden Başlat"}</button>
+          <span class="badge acc">${isExe ? "🖥 Mod: Windows EXE Uygulaması" : "🎬 Mod: Video Oynatıcı"}</span>
+          <span class="badge">${s.loop ? "🔁 Otomatik Tekrar Açık" : "Tekrar Kapalı"}</span>
           ${rs.enabled ? `<span class="badge ${rs.mode === "device_reboot" ? "bad" : "warn"}">Zamanlı reset: ${esc(rs.mode)} ${rs.remaining != null ? "· " + rs.remaining + " sn" : ""}</span>` : ""}
         </div></div>
       <div class="card"><h3>Ses</h3>
@@ -366,6 +371,34 @@ async function settings() {
     <p class="sm mut">Sadece bu cihazda gerçekten bulunan çıkışlar listelenir. Pi 5'te 3.5 mm jak yoktur.</p>
     <button class="pri" onclick="saveAudio()">Uygula</button></div>
 
+  <div class="card" style="grid-column:1/-1"><h3>Çalışma Modu: Video Oynatıcı veya Windows EXE Uygulaması</h3>
+    <p class="sm mut">Cihazda 30 saniyelik Karşılama Ekranından sonra tam ekran <b>Video</b> mu oynatılacağını yoksa masaüstünde bir <b>.EXE Uygulaması</b> (Unity, Unreal, TouchDesigner, İnteraktif Kiosk vb.) mı başlatılacağını seçin.</p>
+    <div class="row" style="gap:14px;margin-bottom:10px">
+      <label class="opt ${(s.playback_mode || "video") === "video" ? "on" : ""}" style="flex:1"><input type="radio" name="pmode" value="video" ${(s.playback_mode || "video") === "video" ? "checked" : ""}><span><b>🎬 Video Oynatıcı Modu (MPV)</b><br><span class="sm mut">Aktif videoyu tam ekran döngülü oynatır (Raspberry Pi &amp; Windows).</span></span></label>
+      <label class="opt ${s.playback_mode === "exe" ? "on" : ""}" style="flex:1"><input type="radio" name="pmode" value="exe" ${s.playback_mode === "exe" ? "checked" : ""}><span><b>🖥 Windows EXE Uygulama Modu</b><br><span class="sm mut">Belirtilen .exe uygulamasını masaüstünde otomatik başlatır, çökerse yeniden açar ve 60 sn reseti uygular.</span></span></label>
+    </div>
+    <div class="grid" style="grid-template-columns:repeat(auto-fit,minmax(260px,1fr));align-items:start">
+      <div>
+        <p>Çalıştırılacak <code>.exe</code> Dosya Yolu (Windows üzerinde):<br>
+          <input id="e_path" style="width:100%" value="${esc(s.exe_path || "")}" placeholder="Ör. C:\\Sergi\\MuzeUygulamasi.exe"></p>
+        <p>Başlatma Parametreleri (İsteğe bağlı argümanlar):<br>
+          <input id="e_args" style="width:100%" value="${esc(s.exe_args || "")}" placeholder="Ör. -popupwindow -fullscreen"></p>
+        <p>Çalışma Klasörü (Boş bırakılırsa .exe'nin kendi klasörü kullanılır):<br>
+          <input id="e_cwd" style="width:100%" value="${esc(s.exe_workdir || "")}" placeholder="Ör. C:\\Sergi"></p>
+        <button class="pri" onclick="saveExeMode()">Çalışma Modunu &amp; EXE Ayarlarını Kaydet</button>
+      </div>
+      <div>
+        <p><b>Bilgisayardan .EXE veya .ZIP (Uygulama Klasörü) Yükle:</b></p>
+        <p class="sm mut">Uygulamanız tek bir <code>.exe</code> ise doğrudan, yanında veri klasörleri varsa (ör. Unity <code>_Data</code> klasörü) <code>.zip</code> olarak yükleyebilirsiniz. Sistem ZIP'i otomatik açıp içindeki ana <code>.exe</code>'yi bulur ve yolunu ayarlar.</p>
+        <div class="row">
+          <button onclick="$('#exefile').click()">.EXE veya .ZIP Paketi Yükle</button>
+          <input type="file" id="exefile" accept=".exe,.zip,.bat,.cmd" hidden onchange="uploadExePkg(this.files[0])">
+        </div>
+        <div id="exeup_prog" class="sm" style="margin-top:8px"></div>
+      </div>
+    </div>
+  </div>
+
   <div class="card" style="grid-column:1/-1"><h3>Karşılama &amp; Bekleme Ekranı (Şirket İsmi, Logo ve Saat)</h3>
     <p class="sm mut">İlk açılışta aktif video yoksa veya oynatma durdurulduğunda hem Raspberry Pi HDMI ekranında hem de Panel Yönetici ekranında bu karşılama alanı gösterilir.</p>
     <div class="grid" style="grid-template-columns:repeat(auto-fit,minmax(260px,1fr));align-items:start">
@@ -441,6 +474,27 @@ const retest = b => { b.disabled = true; b.textContent = "Test ediliyor…"; act
 async function put(values, msg, extra) { return act(() => api("/api/settings", { method: "PUT", json: Object.assign({ values }, extra || {}) }), msg || "Kaydedildi"); }
 const saveGeneral = () => put({ device_name: $("#s_name").value, boot_autoplay: $("#s_boot").checked, autoplay: $("#s_auto").checked, loop: $("#s_loop").checked, video_sync: $("#s_sync").value, hwdec: $("#s_hwdec").value, prefer_hw_encode: $("#s_hwenc").checked });
 const saveAudio = () => put({ audio_output: document.querySelector("input[name=ao]:checked").value }, "Ses çıkışı uygulandı");
+const saveExeMode = () => put({
+  playback_mode: document.querySelector("input[name=pmode]:checked").value,
+  exe_path: $("#e_path").value,
+  exe_args: $("#e_args").value,
+  exe_workdir: $("#e_cwd").value
+}, "Çalışma modu ve EXE ayarları kaydedildi");
+function uploadExePkg(file) {
+  if (!file) return;
+  const box = $("#exeup_prog");
+  const x = new XMLHttpRequest();
+  x.open("PUT", `${base}/api/exe/upload?filename=${encodeURIComponent(file.name)}`);
+  x.setRequestHeader("X-API-Key", key());
+  x.upload.onprogress = e => e.lengthComputable && (box.innerHTML = `${bar(e.loaded / e.total * 100, 101, 101)}<span>%${(e.loaded / e.total * 100).toFixed(0)} yükleniyor...</span>`);
+  x.onload = () => {
+    let d = {}; try { d = JSON.parse(x.responseText); } catch (e) { }
+    if (x.status < 300) { toast("EXE uygulaması yüklendi: " + d.exe_path, "ok"); settings(); }
+    else { toast(d.detail || ("HTTP " + x.status), "err"); box.textContent = ""; }
+  };
+  x.onerror = () => toast("Ağ hatası", "err");
+  x.send(file);
+}
 const saveBranding = () => put({ welcome_enabled: $("#w_en").checked, welcome_boot_sec: +$("#w_sec").value, company_name: $("#w_comp").value, welcome_subtitle: $("#w_sub").value, welcome_show_clock: $("#w_clk").checked, welcome_show_ip: $("#w_ip").checked }, "Karşılama ekranı ayarları kaydedildi");
 async function uploadLogo(file) {
   if (!file) return;

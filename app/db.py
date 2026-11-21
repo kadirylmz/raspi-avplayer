@@ -85,6 +85,10 @@ DEFAULTS: dict[str, Any] = {
     "welcome_show_ip": True,
     "logo_file": "",
     "bg_file": "",
+    "playback_mode": "video",          # video | exe
+    "exe_path": "",                    # full path to .exe or uploaded app
+    "exe_args": "",                    # optional CLI args (e.g. -popupwindow -fullscreen)
+    "exe_workdir": "",                 # optional working directory (defaults to exe parent folder)
     "auth_enabled": False,
     "api_key": "",
 }

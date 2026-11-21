@@ -98,6 +98,8 @@ def put_settings(body: SettingsIn):
         errs.append("Geçersiz tekrar modu")
     if "video_sync" in v and v["video_sync"] not in ("audio", "display-resample"):
         errs.append("Geçersiz senkron modu")
+    if "playback_mode" in v and v["playback_mode"] not in ("video", "exe"):
+        errs.append("Geçersiz çalışma modu (video veya exe olmalı)")
     if "hwdec" in v and v["hwdec"] not in ("auto", "no"):
         errs.append("Geçersiz hwdec")
     if "audio_output" in v and v["audio_output"] != "auto" and \
@@ -123,6 +125,8 @@ def put_settings(body: SettingsIn):
             x = str(x).strip()[:120]
         elif k == "reset_osd_text":
             x = str(x).strip()[:160] or "{saniye} saniye sonra sistem yeniden başlatılacaktır"
+        elif k in ("exe_path", "exe_args", "exe_workdir"):
+            x = str(x).strip()[:500]
         db.put(k, x)
     if any(k.startswith("reset_") for k in v):
         (config.RUN_DIR / "boot_reset_done").unlink(missing_ok=True)
@@ -130,6 +134,8 @@ def put_settings(body: SettingsIn):
         db.add_command("rearm_reset")
     if any(k in v for k in ("welcome_enabled", "welcome_boot_sec", "company_name", "welcome_subtitle", "welcome_show_clock", "welcome_show_ip", "device_name")):
         db.add_command("refresh_welcome")
+    if any(k in v for k in ("playback_mode", "exe_path", "exe_args", "exe_workdir")):
+        db.add_command("unblock")
     log.info("Ayarlar güncellendi: %s", {k: x for k, x in v.items() if k != "api_key"})
     return {"ok": True}
 
@@ -293,3 +299,38 @@ def get_bg():
     if not name or not p.exists():
         raise HTTPException(404, "Arka plan görseli yok")
     return FileResponse(p, headers={"Cache-Control": "no-store"})
+
+
+@router.put("/exe/upload")
+async def upload_exe(request: Request, filename: str = "app.exe"):
+    import shutil
+    import zipfile
+    name = Path(filename).name.strip() or "app.exe"
+    ext = Path(name).suffix.lower()
+    if ext not in (".exe", ".zip", ".bat", ".cmd"):
+        raise HTTPException(415, "Yalnızca .exe, .zip (uygulama klasörü) veya .bat yüklenebilir")
+    apps_dir = config.DATA_DIR / "apps"
+    apps_dir.mkdir(parents=True, exist_ok=True)
+    dst = apps_dir / name
+    with open(dst, "wb") as f:
+        async for chunk in request.stream():
+            f.write(chunk)
+    exe_target = dst
+    if ext == ".zip":
+        extract_dir = apps_dir / dst.stem
+        shutil.rmtree(extract_dir, ignore_errors=True)
+        extract_dir.mkdir(parents=True, exist_ok=True)
+        try:
+            with zipfile.ZipFile(dst, "r") as zf:
+                zf.extractall(extract_dir)
+        except Exception as e:
+            raise HTTPException(400, f"ZIP dosyası açılamadı: {e}")
+        exes = sorted(extract_dir.rglob("*.exe"), key=lambda p: p.stat().st_size, reverse=True)
+        if not exes:
+            raise HTTPException(400, "ZIP arşivinin içinde çalıştırılabilir .exe dosyası bulunamadı")
+        exe_target = exes[0]
+    db.put("exe_path", str(exe_target))
+    db.put("exe_workdir", str(exe_target.parent))
+    db.put("playback_mode", "exe")
+    log.info("EXE uygulaması yüklendi ve aktif edildi: %s", exe_target)
+    return {"ok": True, "exe_path": str(exe_target), "exe_workdir": str(exe_target.parent)}
