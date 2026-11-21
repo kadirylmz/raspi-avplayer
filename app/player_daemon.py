@@ -76,7 +76,7 @@ def build_standby_args(bg_path: str, sock: str, vo_args: Optional[list[str]] = N
         "--image-display-duration=1", "--loop-file=inf",
         "--osd-level=1", "--no-osc", "--no-input-default-bindings", "--input-vo-keyboard=no",
         "--osd-font-size=78", "--osd-bold=yes",
-        "--osd-align-x=center", "--osd-align-y=bottom", "--osd-margin-y=335",
+        "--osd-align-x=center", "--osd-align-y=bottom", "--osd-margin-y=235",
         "--osd-color=#FFFFFFFF", "--osd-back-color=#00000000",
         "--osd-border-size=2", "--osd-border-color=#663B9EFF", "--osd-shadow-offset=3", "--osd-shadow-color=#99000000",
         "--cursor-autohide=always", "--no-border", "--msg-level=all=warn",
